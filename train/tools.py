@@ -13,6 +13,8 @@ import torch
 from train.config import PolicyParam
 import numpy as np 
 from geek.env.logger import Logger
+from utils.geometry import get_polygon
+
 
 logger = Logger.get_logger(__name__)
 STD = 2 ** 0.5
@@ -173,9 +175,9 @@ class EnvPostProcsser:
         if self.prev_distance is None:
             self.prev_distance = distance_with_target
         
-        distance_reward = (self.prev_distance - distance_with_target) * 0.5
+        distance_reward = (self.prev_distance - distance_with_target) * 0.5  # 车辆相距离终点前进的奖励
         self.prev_distance = distance_with_target
-        step_reward = -0.1
+        step_reward = 0  # -0.1
 
         # if info["collided"]:
         #     end_reward = -200
@@ -185,6 +187,57 @@ class EnvPostProcsser:
             end_reward = -200
         else:
             end_reward = 0.0
+        
+        base_reward = distance_reward + end_reward + step_reward
+
+        car_polygon = get_polygon(
+            center=curr_xy,
+            length=observation["player"]['property'][1],  # 车辆长度
+            width=observation["player"]['property'][0],  # 车辆宽度
+            theta=observation["player"]["status"][2]  # 车辆朝向角
+        )
+
+        car_x, car_y = car_polygon.exterior.xy
+        
+        left_line_accept_ratio = max((min(car_y) - 1) / 0.5, 0.0)
+        right_line_accept_ratio = max((1 + 3.75 * 3 - max(car_y)) / 0.5, 0.0)
+        area_accept_ratio = min(left_line_accept_ratio, right_line_accept_ratio, 1.0)
+        
+        current_speed = observation["player"]["status"][4]
+        
+        safe_ratio_list = [1.0]
+        for npc_info in observation['npcs']:
+            if int(npc_info[0]) == 0:
+                continue
+            npc_center = (npc_info[2], npc_info[3])
+            npc_width = npc_info[9]
+            npc_length = npc_info[10]
+            npc_theta = npc_info[4]
+            npc_speed = npc_info[5]
+
+            npc_polygon = get_polygon(
+                center=npc_center,
+                length=npc_length,
+                width=npc_width,
+                theta=npc_theta
+            )
+            npc_x, npc_y = npc_polygon.exterior.xy
+
+            block = False
+            if max(npc_x) < min(car_x):  # 该 npc 在车的前方
+                block_range = (min(npc_y), max(npc_y))  # 该 npc 的车道占据范围
+                if (block_range[0] < min(car_y) < block_range[1]) or (block_range[0] < max(car_y) < block_range[1]):
+                    block = True  # 障碍物在车辆的前方，并占据着道路
+
+            safe_distance = car_polygon.distance(npc_polygon)
+            dv = current_speed - npc_speed
+            if block and dv > 0:
+                safe_t = safe_distance / dv
+                if safe_t < 3:  # 5秒的安全时间
+                    safe_ratio_list.append(safe_t / 3.0)
+            if safe_distance < self.cfgs.dangerous_distance:
+                safe_ratio_list.append(0.0)
+        safe_ratio = min(safe_ratio_list)
         
         if observation['map'] is not None:
             lane_list = []
@@ -199,64 +252,24 @@ class EnvPostProcsser:
             current_offset = 0
             speed_limit = 27.78
 
-        # add penalty when reaching close to other cars (same lane)
-        length = observation["player"]['property'][1] # 车辆长度
-        width = observation["player"]['property'][0] # 车辆宽度
-        npc_info = observation['npcs'] 
-        same_lane_npcs = [] # 同车道 npc
-        neighbor_lane_npcs = [] # 不同车道 npc
-        for npc in npc_info:
-            if npc[0] == 0:
-                break
-            dy = npc[3] - observation["player"]['status'][1]
-            dx = npc[2] - observation["player"]['status'][0]
-            if np.abs(dy) < (width + npc[-2])/2:
-                same_lane_npcs.append(npc)
-            if np.abs(dx) < (length + npc[-1])/2: # (车长 + npc车长)/2
-                neighbor_lane_npcs.append(npc)
-
-        collide_reward_1 = 0
-        for npc in same_lane_npcs:
-            safe_distance = (npc[-1] + length)/2 + length
-            dx = npc[2] - observation["player"]['status'][0]
-            if dx < 0:
-                if np.abs(dx) < safe_distance:
-                    penalty = -0.1-(safe_distance - np.abs(dx))*0.1
-                    collide_reward_1 = min(collide_reward_1, penalty)
-        
-        # add penalty when reaching close to other cars (different lane)
-        collide_reward_2 = 0
-        for npc in neighbor_lane_npcs:
-            safe_distance = ((npc[-2]) + width)/2 + 0.5
-            dy = npc[3] - observation["player"]['status'][1]
-            if np.abs(dy) < safe_distance:
-                penalty = -0.1-(safe_distance - np.abs(dy))*1
-                collide_reward_2 = min(collide_reward_2, penalty)
-
-        collide_reward = collide_reward_1 + collide_reward_2
-        if info['collided']:
-            collide_reward -= 10 
-
-        speed = observation["player"]["status"][4]
-        acc_y = observation["player"]["status"][6]
-        acc_x = observation["player"]["status"][5]
+        current_acc_y = observation["player"]["status"][6]
+        current_acc_x = observation["player"]["status"][5]
 
         last_acc_y = self.last_obs["player"]["status"][6]
         last_acc_x = self.last_obs["player"]['status'][5]
 
-        acc_y_dealta = (acc_y - last_acc_y) / self.args.dt
-        acc_x_dealta = (acc_x - last_acc_x) / self.args.dt
+        acc_y_dealta = (current_acc_y - last_acc_y) / self.args.dt
+        acc_x_dealta = (current_acc_x - last_acc_x) / self.args.dt
 
         acc_prime_reward = 0 
         acc_reward = 0
         speed_reward = 0
-        offset_reward = 0
 
         # add penalty when make big turn 
-        if np.abs(acc_y) > 4:
+        if np.abs(current_acc_y) > 4:
             acc_reward += -1
-        elif np.abs(acc_y) > 2:
-            acc_reward += -0.4 - (np.abs(acc_y) - 2)*0.3
+        elif np.abs(current_acc_y) > 2:
+            acc_reward += -0.4 - (np.abs(current_acc_y) - 2)*0.3
         if np.abs(acc_y_dealta) > 0.9:
             acc_prime_reward += -1
         elif np.abs(acc_y_dealta) > 0.7:
@@ -269,28 +282,28 @@ class EnvPostProcsser:
             acc_prime_reward += -0.4 - (np.abs(acc_x_dealta) - 0.7)*3
 
         # add penalty when speed over limit
-        if speed > speed_limit:
-            speed_reward += -(speed - speed_limit)*0.1
+        if current_speed > speed_limit:
+            speed_reward += -(current_speed - speed_limit)*0.1
 
         # add penalty when offset is too large (lane width 3.75)
         # if current_lane_index == 2:
-        if np.abs(current_offset) > 0.5:
-            offset_reward += -(np.abs(current_offset)-0.5)*1
+        # if np.abs(current_offset) > 0.5:
+        #     offset_reward += -(np.abs(current_offset)-0.5)*1
 
-        rule_reward = speed_reward + acc_reward + acc_prime_reward + offset_reward
+        rule_reward = speed_reward + acc_reward + acc_prime_reward
 
         self.last_obs = observation
-        base_reward = distance_reward + end_reward + step_reward
+
         # balance different reward 
-        collide_reward_balance = 0 
         rule_reward_balance = 0
-        if self.stage == 2:
-            rule_reward_balance = 1
+        
         # test 
         if balance is not None:
             rule_reward_balance = balance
-        total_reward = base_reward + collide_reward_balance*collide_reward + rule_reward_balance*rule_reward 
-        info = dict(base_reward=base_reward, collide_reward=collide_reward, rule_reward=rule_reward)
+        
+        total_reward = base_reward * safe_ratio * area_accept_ratio + rule_reward_balance*rule_reward 
+        
+        info = dict(base_reward=base_reward, collide_reward=0, rule_reward=rule_reward)
 
         return total_reward, info
 

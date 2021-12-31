@@ -88,7 +88,7 @@ class MulProPPO:
         except:
             print("file is existed")
         
-        self.writer = Writer(self.exp_dir, openid='oWbT458Ya1xKsC1d_E_RXWf0MNos')
+        self.writer = Writer(self.exp_dir, openid='oWbT458DhHKaykIOzAs_9nXUFL_M')
 
     def _read_history_models(self):
         all_index = []
@@ -373,7 +373,7 @@ class MulProPPO:
         self.writer.scalar_summary('mean_step', mean_step, episode)
 
     def train(self):
-        nc = notice("oWbT458Ya1xKsC1d_E_RXWf0MNos")
+        nc = notice("oWbT458DhHKaykIOzAs_9nXUFL_M")
         nc.task_complete_notice(task_name="Training", task_progree=f"training Started {self.task_name}.")
 
         for i_episode in range(self.start_episode, self.num_episode):
@@ -434,7 +434,7 @@ class MulProPPO:
                 self.writer.scalar_summary('Eval Successs Rate', reach_goal_rate, i_episode)
                 self.writer.scalar_summary('Eval Mean Reward', mean_reward, i_episode)
                 self.writer.scalar_summary('Eval Mean Step', mean_step, i_episode)
-                nc = notice("oWbT458Ya1xKsC1d_E_RXWf0MNos")
+                nc = notice("oWbT458DhHKaykIOzAs_9nXUFL_M")
                 nc.task_complete_notice(task_name="Training", task_progree=f"{self.task_name} training {i_episode}")
                 self.writer.show('Eval Successs Rate')
                 self.writer.show('Eval Mean Reward')
