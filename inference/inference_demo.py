@@ -24,7 +24,6 @@ def run(worker_index):
             if done and not infer_done:
                 obs = env.reset()
             elif infer_done:
-                logger.info(f"{worker_index}:infer done:{info}")
                 break
     except Exception as e:
         logger.info(f"{worker_index}, error: {str(e)}")

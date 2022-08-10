@@ -103,7 +103,7 @@ class MatrixEnv(ABC, gym.Env):
         Returns:
             Tuple[Dict, float, bool, Dict]:  Observation, Reward, Done, Info
                 Observation 定义如下：
-                                        {"players":{
+                                        {"player":{
                                                 "status": np.ndarray(9,), 分别是
                                                                 车辆后轴中心位置 x,
                                                                 车辆后轴中心位置 y,
