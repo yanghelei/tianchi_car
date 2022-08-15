@@ -25,6 +25,7 @@ class DoneReason:
     TIMEOUT = "Timeout"
     MAX_EXP_STEP = "MaxExpStep"
     INFERENCE_DONE = "InferenceDone"
+    Runtime_ERROR = "RuntimeError"
 
 
 Observations = namedtuple("Observations", ["obs", "reward", "done", "info"])
@@ -150,12 +151,16 @@ class MatrixEnv(ABC, gym.Env):
                                                 （2）主车bounding box任意点出地图或与环境车辆碰撞
                                                 （3）超时，时限根据场景不同
 
-                                Info：{"DoneReason": # 内容为 {"CollidedOnRoad", "CollidedOnObject",
-                                     #       "Timeout", "MaxExpStep"} 中对应结束状态输出
-                "TotalExpStepRemain": int(), 总剩余步数，
-                                                   "MaxStep": int(), 场景最大步数
-                                                   "CurrentStep": int()， 场景当前步数
-                                                   }
+                                Info：{"DoneReason": 
+                                     # "CollidedOnRoad", 
+                                     # "CollidedOnObject",
+                                     # "Timeout", 
+                                     # "MaxExpStep"
+                                     # "RuntimeError", 运行时异常, 此时可忽略当前帧
+                                    "TotalExpStepRemain": int(), #总剩余步数，
+                                    "MaxStep": int(), #场景最大步数
+                                    "CurrentStep": int()， #场景当前步数
+                                    }
 
         车辆参数：
             宽度：2.110 米
