@@ -5,10 +5,12 @@
 
 import logging
 import os
-import time
 import sys
 
 sys.path.append(os.path.split(os.path.dirname(os.path.abspath(__file__)))[0] + '/')
+
+import time
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -22,22 +24,21 @@ from geek.env.logger import Logger
 
 logger = Logger.get_logger(__name__)
 
-
 class MulProPPO:
     def __init__(self, obs_type, logger) -> None:
-        self.args = PolicyParam  # 训练参数
-        self.obs_type = obs_type  # 'cnn'
+        self.args = PolicyParam
+        self.obs_type = obs_type
         self.logger = logger
         self.global_sample_size = 0
-        self._make_dir()  # 建立 result 目录和 exp 目录
+        self._make_dir()
 
         torch.manual_seed(self.args.seed)
         np.random.seed(self.args.seed)
         if self.args.device == "cuda":
             torch.cuda.manual_seed(self.args.seed)
 
-        self.sampler = MemorySampler(self.args, self.logger)  # 经验采样
-        self.model = PPOPolicy(num_outputs=2)
+        self.sampler = MemorySampler(self.args, self.logger)
+        self.model = PPOPolicy(2)
         self.optimizer = opt.Adam(self.model.parameters(), lr=self.args.lr)
 
         self.clip_now = self.args.clip
@@ -47,7 +48,9 @@ class MulProPPO:
     def _load_model(self, model_path: str = None):
         if not model_path:
             return
-        pretrained_dict = torch.load(model_path, map_location=lambda storage, loc: storage.cuda(self.args.device))
+        pretrained_dict = torch.load(
+            model_path, map_location=lambda storage, loc: storage.cuda(self.args.device)
+        )
         if self._check_keys(self.model, pretrained_dict):
             self.model.load_state_dict(pretrained_dict, strict=False)
 
@@ -83,7 +86,9 @@ class MulProPPO:
 
     def train(self):
         for i_episode in range(self.args.num_episode):
-            self.logger.info("----------------------" + str(i_episode) + "-------------------------")
+            self.logger.info(
+                "----------------------" + str(i_episode) + "-------------------------"
+            )
             memory = self.sampler.sample(self.model)
             batch = memory.sample()
             batch_size = len(memory)
@@ -107,7 +112,9 @@ class MulProPPO:
             for i in reversed(range(batch_size)):
                 returns[i] = rewards[i] + self.args.gamma * prev_return * masks[i]
                 deltas[i] = rewards[i] + self.args.gamma * prev_value * masks[i] - values[i]
-                advantages[i] = (deltas[i] + self.args.gamma * self.args.lamda * prev_advantage * masks[i])
+                advantages[i] = (
+                    deltas[i] + self.args.gamma * self.args.lamda * prev_advantage * masks[i]
+                )
 
                 prev_return = returns[i]
                 prev_value = values[i]
@@ -123,16 +130,22 @@ class MulProPPO:
             advantages = advantages.to(self.args.device)
             returns = returns.to(self.args.device)
             for i_epoch in range(int(self.args.num_epoch * batch_size / self.args.minibatch_size)):
-                minibatch_ind = np.random.choice(batch_size, self.args.minibatch_size, replace=False)
+                minibatch_ind = np.random.choice(
+                    batch_size, self.args.minibatch_size, replace=False
+                )
                 minibatch_env_state = env_state[minibatch_ind]
                 minibatch_vec_state = vec_state[minibatch_ind]
                 minibatch_actions = actions[minibatch_ind]
                 minibatch_values = values[minibatch_ind]
                 minibatch_oldlogproba = oldlogproba[minibatch_ind]
-                minibatch_newlogproba, entropy = self.model.get_logproba(minibatch_env_state, minibatch_vec_state, minibatch_actions)
+                minibatch_newlogproba, entropy = self.model.get_logproba(
+                    minibatch_env_state, minibatch_vec_state, minibatch_actions
+                )
                 minibatch_advantages = advantages[minibatch_ind]
                 minibatch_returns = returns[minibatch_ind]
-                minibatch_newvalues = self.model._forward_critic(minibatch_env_state, minibatch_vec_state).flatten()
+                minibatch_newvalues = self.model._forward_critic(
+                    minibatch_env_state, minibatch_vec_state
+                ).flatten()
 
                 assert minibatch_oldlogproba.shape == minibatch_newlogproba.shape
                 ratio = torch.exp(minibatch_newlogproba - minibatch_oldlogproba)
@@ -142,7 +155,9 @@ class MulProPPO:
                 loss_surr = -torch.mean(torch.min(surr1, surr2))
 
                 if self.args.use_clipped_value_loss:
-                    value_pred_clipped = minibatch_values + (minibatch_newvalues - minibatch_values).clamp(-self.args.vf_clip_param, self.args.vf_clip_param)
+                    value_pred_clipped = minibatch_values + (
+                        minibatch_newvalues - minibatch_values
+                    ).clamp(-self.args.vf_clip_param, self.args.vf_clip_param)
                     value_losses = (minibatch_newvalues - minibatch_returns).pow(2)
                     value_loss_clip = (value_pred_clipped - minibatch_returns).pow(2)
                     loss_value = torch.max(value_losses, value_loss_clip).mean()
@@ -151,24 +166,31 @@ class MulProPPO:
 
                 if self.args.lossvalue_norm:
                     minibatch_return_6std = 6 * minibatch_returns.std()
-                    loss_value = (torch.mean((minibatch_newvalues - minibatch_returns).pow(2)) / minibatch_return_6std)
+                    loss_value = (
+                        torch.mean((minibatch_newvalues - minibatch_returns).pow(2))
+                        / minibatch_return_6std
+                    )
                 else:
                     loss_value = torch.mean((minibatch_newvalues - minibatch_returns).pow(2))
 
                 loss_entropy = -torch.mean(entropy)
 
-                total_loss = (loss_surr + self.args.loss_coeff_value * loss_value + self.args.loss_coeff_entropy * loss_entropy)
+                total_loss = (
+                    loss_surr
+                    + self.args.loss_coeff_value * loss_value
+                    + self.args.loss_coeff_entropy * loss_entropy
+                )
                 self.optimizer.zero_grad()
                 total_loss.backward()
                 nn.utils.clip_grad_norm_(self.model.parameters(), self.args.max_grad_norm)
                 self.optimizer.step()
 
             if self.args.schedule_clip == "linear":
-                ep_ratio = 1 - (i_episode / self.args.num_episode)
+                ep_ratio = 1 - ((i_episode) / self.args.num_episode)
                 self.clip_now = self.args.clip * ep_ratio
 
             if self.args.schedule_adam == "linear":
-                ep_ratio = 1 - (i_episode / self.args.num_episode)
+                ep_ratio = 1 - ((i_episode) / self.args.num_episode)
                 lr_now = self.args.lr * ep_ratio
                 for g in self.optimizer.param_groups:
                     g["lr"] = lr_now
@@ -213,21 +235,38 @@ class MulProPPO:
                 self.logger.info("Finished iteration: " + str(i_episode))
                 self.logger.info("reach goal rate: " + str(reach_goal_rate))
                 self.logger.info("reward: " + str(reward))
-                self.logger.info("total loss: " + str(total_loss) + " = " + str(loss_surr) + "+" + str(self.args.loss_coeff_value) + "*" + str(loss_value) + "+" + str(self.args.loss_coeff_entropy) + "*" + str(loss_entropy))
+                self.logger.info(
+                    "total loss: "
+                    + str(total_loss)
+                    + " = "
+                    + str(loss_surr)
+                    + "+"
+                    + str(self.args.loss_coeff_value)
+                    + "*"
+                    + str(loss_value)
+                    + "+"
+                    + str(self.args.loss_coeff_entropy)
+                    + "*"
+                    + str(loss_entropy)
+                )
                 self.logger.info("Step: " + str(mean_step))
                 self.logger.info("total data number: " + str(self.global_sample_size))
-                self.logger.info("lr now: " + str(lr_now) + "  lr reduce per iteration: " + str(iteration_reduce))
+                self.logger.info(
+                    "lr now: " + str(lr_now) + "  lr reduce per iteration: " + str(iteration_reduce)
+                )
                 # self.writer.add_scalar("reward", reward, i_episode)
                 # self.writer.add_scalar("total_loss", total_loss, i_episode)
                 # self.writer.add_scalar("reach_goal_rate", reach_goal_rate, i_episode)
             if i_episode % self.args.save_num_episode == 0:
-                torch.save(self.model.state_dict(), self.model_dir + "network_{}.pth".format(i_episode))
+                torch.save(
+                    self.model.state_dict(), self.model_dir + "network_{}.pth".format(i_episode)
+                )
         self.sampler.close()
 
 
 if __name__ == "__main__":
     torch.set_num_threads(1)
-
+    
     obs_type = "cnn"
     mpp = MulProPPO(obs_type=obs_type, logger=logger)
     mpp.train()

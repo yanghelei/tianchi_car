@@ -17,6 +17,8 @@ from cvxpy import vec
 from train.config import PolicyParam
 from train.np_image import NPImage
 
+STD = 2 ** 0.5
+
 
 def file_name(file_dir, file_type):
     L = []
@@ -78,7 +80,50 @@ class Normalization:
         return x
 
 
-class TianchiCNN(object):  # not used
+def initialize_weights(mod, initialization_type, scale=STD):
+    """
+    Weight initializer for the models.
+    Inputs: A model, Returns: none, initializes the parameters
+    """
+    for p in mod.parameters():
+        if initialization_type == "normal":
+            p.data.normal_(0.01)
+        elif initialization_type == "xavier":
+            if len(p.data.shape) >= 2:
+                nn.init.xavier_uniform_(p.data)
+            else:
+                p.data.zero_()
+        elif initialization_type == "orthogonal":
+            if len(p.data.shape) >= 2:
+                orthogonal_init(p.data, gain=scale)
+            else:
+                p.data.zero_()
+        else:
+            raise ValueError("Need a valid initialization key")
+
+
+def orthogonal_init(tensor, gain=1):
+    if tensor.ndimension() < 2:
+        raise ValueError("Only tensors with 2 or more dimensions are supported")
+
+    rows = tensor.size(0)
+    cols = tensor[0].numel()
+    flattened = tensor.new(rows, cols).normal_(0, 1)
+
+    if rows < cols:
+        flattened.t_()
+
+    u, s, v = ch.svd(flattened, some=True)
+    if rows < cols:
+        u.t_()
+    q = u if tuple(u.shape) == (rows, cols) else v
+    with ch.no_grad():
+        tensor.view_as(q).copy_(q)
+        tensor.mul_(gain)
+    return tensor
+
+
+class TianchiCNN(object):
     def __init__(
         self,
     ):
@@ -149,7 +194,7 @@ class EnvPostProcsser:
         self.img_width = self.args.img_width
         self.img_length = self.args.img_length
         self.vec_length = self.args.ego_vec_length
-        self.surr_vec_length = self.args.surr_vec_length  # 7： 最多考虑7个最近的障碍物？
+        self.surr_vec_length = self.args.surr_vec_length
         self.surr_number = self.args.surr_agent_number
         self.obs_type = self.args.obs_type
 
@@ -166,7 +211,6 @@ class EnvPostProcsser:
             self.surr_img_deque.append(numpy.zeros((self.img_width, self.img_length, 3)))
             self.surr_vec_deque.append(numpy.zeros((1, self.surr_number * 7)))
             self.vec_deque.append(numpy.zeros(self.vec_length))
-        
         self.tianchi_cnn = TianchiCNN()  # not used
 
     def assemble_surr_cnn_obs(self, observation, env):
@@ -186,29 +230,25 @@ class EnvPostProcsser:
         return env_state
 
     def assemble_surr_vec_obs(self, observation):
-        curr_xy = (
-            observation["player"]["status"][0],  # 车辆后轴中心位置x
-            observation["player"]["status"][1]   # 车辆后轴中心位置y
-        )
+        curr_xy = (observation["player"]["status"][0], observation["player"]["status"][1])
         npc_info_dict = {}
         
-        for npc_info in observation["npcs"]:  # 遍历障碍物
+        for npc_info in observation["npcs"]:
             if int(npc_info[0]) == 0:
                 continue
             npc_info_dict[
-                numpy.sqrt((npc_info[2] - curr_xy[0]) ** 2 + (npc_info[3] - curr_xy[1]) ** 2)  # key: 障碍物距离车辆后轴中心位置的距离
+                numpy.sqrt((npc_info[2] - curr_xy[0]) ** 2 + (npc_info[3] - curr_xy[1]) ** 2)
             ] = [
-                npc_info[2] - curr_xy[0],  # dx
-                npc_info[3] - curr_xy[1],  # dy
-                npc_info[4],  # 障碍物（车体）朝向
-                numpy.sqrt(npc_info[5] ** 2 + npc_info[6] ** 2),  # 障碍物速度（标量）
-                numpy.sqrt(npc_info[7] ** 2 + npc_info[8] ** 2),  # 障碍物加速度（标量）
-                npc_info[9],  # 障碍物宽度
-                npc_info[10],  # 障碍物长度
+                npc_info[2] - curr_xy[0],
+                npc_info[3] - curr_xy[1],
+                npc_info[4],
+                numpy.sqrt(npc_info[5] ** 2 + npc_info[6] ** 2),
+                numpy.sqrt(npc_info[7] ** 2 + npc_info[8] ** 2),
+                npc_info[9],
+                npc_info[10],
             ]
         sorted_npc_info_dict = dict(sorted(npc_info_dict.items(), key=lambda x: x[0]))
         surr_obs_list = list(sorted_npc_info_dict.values())
-        
         for _ in range(self.surr_number - len(surr_obs_list)):
             surr_obs_list.append(list(numpy.zeros(self.surr_vec_length)))
             
@@ -217,39 +257,35 @@ class EnvPostProcsser:
         self.surr_vec_deque.append(curr_surr_obs.reshape(1, -1))
         surr_vec_obs = numpy.concatenate(list(self.surr_vec_deque), axis=0)[numpy.newaxis, :, :]
         env_state = torch.Tensor(surr_vec_obs).float().unsqueeze(0)
-        
         return env_state
 
     def assemble_ego_vec_obs(self, observation):
         target_xy = (
-            (observation["player"]["target"][0] + observation["player"]["target"][4]) / 2,  # 目标区域中心位置x
-            (observation["player"]["target"][1] + observation["player"]["target"][5]) / 2,  # 目标区域中心位置y
+            (observation["player"]["target"][0] + observation["player"]["target"][4]) / 2,
+            (observation["player"]["target"][1] + observation["player"]["target"][5]) / 2,
         )
-        curr_xy = (observation["player"]["status"][0], observation["player"]["status"][1])  # 当前车辆位置
-        delta_xy = (target_xy[0] - curr_xy[0], target_xy[1] - curr_xy[1])  # 目标区域与当前位置的绝对偏差
-        curr_yaw = observation["player"]["status"][2]  # 当前朝向
-        curr_velocity = observation["player"]["status"][3]  # 当前车辆后轴中心纵向速度
-        prev_steer = observation["player"]["status"][7]  # 上一个前轮转角命令
-        prev_acc = observation["player"]["status"][8]  # 上一个加速度命令
+        curr_xy = (observation["player"]["status"][0], observation["player"]["status"][1])
+        delta_xy = (target_xy[0] - curr_xy[0], target_xy[1] - curr_xy[1])
+        curr_yaw = observation["player"]["status"][2]
+        curr_velocity = observation["player"]["status"][3]
+        prev_steer = observation["player"]["status"][7]
+        prev_acc = observation["player"]["status"][8]
         lane_list = []
         
         for lane_info in observation["map"].lanes:
             lane_list.append(lane_info.lane_id)
-        
-        current_lane_index = lane_list.index(observation["map"].lane_id)  # 当前所处车道的id?
-        
+        current_lane_index = lane_list.index(observation["map"].lane_id)
         current_offset = observation["map"].lane_offset
-        
         vec_obs = numpy.array(
             [
-                delta_xy[0],  # 目标区域与当前位置的偏差x
-                delta_xy[1],  # 目标区域与当前位置的偏差y
-                curr_yaw,  # 当前车辆的朝向角
-                curr_velocity,  # 车辆后轴当前纵向速度
-                prev_steer,  # 上一个前轮转角命令
-                prev_acc,  # 上一个加速度命令
-                current_lane_index,  # 当前所处车道的id?
-                current_offset,  # 当前车道的偏移量？
+                delta_xy[0],
+                delta_xy[1],
+                curr_yaw,
+                curr_velocity,
+                prev_steer,
+                prev_acc,
+                current_lane_index,
+                current_offset,
             ]
         )
         vec_obs = self.vec_normalize(vec_obs)
@@ -259,24 +295,20 @@ class EnvPostProcsser:
         return vec_state
 
     def assemble_reward(self, observation: Dict, info: Dict) -> float:
-        """
-        Reward 构成：
-            每步负奖励、执行动作后距离目标变近/远的奖励、终止奖励
-        """
         target_xy = (
-            (observation["player"]["target"][0] + observation["player"]["target"][4]) / 2,  # 目标区域中心位置x
-            (observation["player"]["target"][1] + observation["player"]["target"][5]) / 2,  # 目标区域中心位置y
+            (observation["player"]["target"][0] + observation["player"]["target"][4]) / 2,
+            (observation["player"]["target"][1] + observation["player"]["target"][5]) / 2,
         )
-        curr_xy = (observation["player"]["status"][0], observation["player"]["status"][1])  # 当前车辆位置
-        
-        distance_with_target = numpy.sqrt((target_xy[0] - curr_xy[0]) ** 2 + (target_xy[1] - curr_xy[1]) ** 2)  # 当前位置与目标位置的距离
-        
-        if self.prev_distance is None:  # 上一时刻与目标的距离
+        curr_xy = (observation["player"]["status"][0], observation["player"]["status"][1])
+        distance_with_target = numpy.sqrt(
+            (target_xy[0] - curr_xy[0]) ** 2 + (target_xy[1] - curr_xy[1]) ** 2
+        )
+        if self.prev_distance is None:
             self.prev_distance = distance_with_target
-        distance_reward = (self.prev_distance - distance_with_target) / (self.target_speed * self.dt)  # 变近的距离 / (30 * 0.1)
-        
+        distance_reward = (self.prev_distance - distance_with_target) / (
+            self.target_speed * self.dt
+        )
         self.prev_distance = distance_with_target
-        
         step_reward = -0.5
 
         if info["collided"]:
@@ -284,14 +316,13 @@ class EnvPostProcsser:
         elif info["reached_stoparea"]:
             end_reward = 200
         elif info["timeout"]:
-            end_reward = -200  # 绝对值是否应该比collided更大
+            end_reward = -200
         else:
             end_reward = 0.0
-        
         return distance_reward + end_reward + step_reward
 
     def assemble_surr_obs(self, observation, env):
-        if self.obs_type is "cnn":  # 赛题给的是'vec'，'cnn'没有被使用
+        if self.obs_type is "cnn":
             return self.assemble_surr_cnn_obs(observation=observation, env=env)
         elif self.obs_type is "vec":
             return self.assemble_surr_vec_obs(observation=observation)

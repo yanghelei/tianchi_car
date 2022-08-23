@@ -15,7 +15,7 @@ class PolicyParam:
 
     num_workers: int = 10
     num_episode: int = 100000
-    batch_size: int = 1024
+    batch_size: int = 4096
     minibatch_size: int = 256
     num_epoch: int = 10
     save_num_episode: int = 10

@@ -98,28 +98,22 @@ class EnvWorker(mp.Process):
                                 value = value.data.cpu().numpy()[0][0]
                                 env_state = env_state.data.cpu().numpy()[0]
                                 vec_state = vec_state.data.cpu().numpy()[0]
-                            
-                            steer = self.lmap(np.clip(action[0], -1.0, 1.0), [-1.0, 1.0], [-0.39269908, 0.39269908],)  # 裁剪动作至合理区间
-                            acc = self.lmap(np.clip(action[1], -1.0, 1.0), [-1.0, 1.0], [-2.0, 2.0])  # 裁剪动作至合理区间
-                            
-                            obs, reward, done, info = self.env.step(np.array([steer, acc]))  # 这里的 reward 没有用，在后面会over write
-                            
+                            steer = self.lmap(np.clip(action[0], -1.0, 1.0), [-1.0, 1.0], [-0.39269908, 0.39269908])
+                            acc = self.lmap(np.clip(action[1], -1.0, 1.0), [-1.0, 1.0], [-2.0, 2.0])
+                            obs, reward, done, info = self.env.step(np.array([steer, acc]))
                             new_env_state = self.env_post_processer.assemble_surr_obs(obs, self.env)
                             new_vec_state = self.env_post_processer.assemble_ego_vec_obs(obs)
-                            
-                            reward = self.env_post_processer.assemble_reward(obs, info)  # 计算奖励，obs是观测值，info是terminate的情况
-                            
+                            reward = self.env_post_processer.assemble_reward(obs, info)
                             mask = 0 if done else 1
-                            
-                            episode.push(env_state, vec_state, value, action, logproba, mask, reward, info)
-                            
+                            episode.push(
+                                env_state, vec_state, value, action, logproba, mask, reward, info
+                            )
                             if done:
                                 with self.lock:
                                     self.queue.put(episode)
                                 break
                             env_state = new_env_state
                             vec_state = new_vec_state
-                    
                     except Exception as e:
                         logger.error(f"exception:{e}")
 
@@ -135,7 +129,7 @@ class MemorySampler(object):
     def __init__(self, args, logger):
         self.logger = logger
         self.args = args
-        self.num_workers = args.num_workers  # worker数
+        self.num_workers = args.num_workers
         self.seed = args.seed
         self.batch_size = args.batch_size
         self.device = args.device
