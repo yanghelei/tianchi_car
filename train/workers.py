@@ -19,7 +19,7 @@ from train.tools import EnvPostProcsser
 
 Transition = namedtuple(
     "Transition",
-    ("env_state", "vec_state", "value", "action", "logproba", "mask", "reward", "info"),
+    ("env_obs", "vec_obs", "value", "action", "logproba", "mask", "reward", "info"),
 )
 Get_Enough_Batch = mp.Value("i", 0)
 

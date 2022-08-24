@@ -7,7 +7,9 @@ from multiprocessing import Pool
 
 import gym
 import numpy
-
+import os 
+import sys 
+sys.path.append(os.path.split(os.path.dirname(os.path.abspath(__file__)))[0] + '/')
 from geek.env.logger import Logger
 from geek.env.matrix_env import DoneReason, Scenarios
 

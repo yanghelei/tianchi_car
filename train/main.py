@@ -11,7 +11,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as opt
-
+import sys 
+sys.path.append(os.path.split(os.path.dirname(os.path.abspath(__file__)))[0] + '/')
 # from tensorboardX import SummaryWriter
 from train.config import PolicyParam
 from train.policy import PPOPolicy
@@ -94,8 +95,8 @@ class MulProPPO:
             values = torch.from_numpy(np.array(batch.value))
             masks = torch.from_numpy(np.array(batch.mask))
             actions = torch.from_numpy(np.array(batch.action))
-            env_state = torch.from_numpy(np.array(batch.env_state))
-            vec_state = torch.from_numpy(np.array(batch.vec_state))
+            sur_obs = torch.from_numpy(np.array(batch.sur_obs))
+            vec_obs = torch.from_numpy(np.array(batch.vec_obs))
             oldlogproba = torch.from_numpy(np.array(batch.logproba))
 
             returns = torch.Tensor(batch_size)
@@ -118,9 +119,9 @@ class MulProPPO:
             if self.args.advantage_norm:
                 advantages = (advantages - advantages.mean()) / (advantages.std() + self.args.EPS)
 
-            env_state = env_state.to(self.args.device)
+            sur_obs = sur_obs.to(self.args.device)
             values = values.to(self.args.device)
-            vec_state = vec_state.to(self.args.device)
+            vec_obs = vec_obs.to(self.args.device)
             actions = actions.to(self.args.device)
             oldlogproba = oldlogproba.to(self.args.device)
             advantages = advantages.to(self.args.device)
@@ -129,19 +130,19 @@ class MulProPPO:
                 minibatch_ind = np.random.choice(
                     batch_size, self.args.minibatch_size, replace=False
                 )
-                minibatch_env_state = env_state[minibatch_ind]
-                minibatch_vec_state = vec_state[minibatch_ind]
+                minibatch_sur_obs = sur_obs[minibatch_ind]
+                minibatch_ego_obs = vec_obs[minibatch_ind]
+                minibatch_env_state = self.model.get_env_feature(minibatch_sur_obs, 
+                                                                 minibatch_ego_obs)
                 minibatch_actions = actions[minibatch_ind]
                 minibatch_values = values[minibatch_ind]
                 minibatch_oldlogproba = oldlogproba[minibatch_ind]
                 minibatch_newlogproba, entropy = self.model.get_logproba(
-                    minibatch_env_state, minibatch_vec_state, minibatch_actions
+                   minibatch_env_state, minibatch_actions
                 )
                 minibatch_advantages = advantages[minibatch_ind]
                 minibatch_returns = returns[minibatch_ind]
-                minibatch_newvalues = self.model._forward_critic(
-                    minibatch_env_state, minibatch_vec_state
-                ).flatten()
+                minibatch_newvalues = self.model._forward_critic(minibatch_env_state).flatten()
 
                 assert minibatch_oldlogproba.shape == minibatch_newlogproba.shape
                 ratio = torch.exp(minibatch_newlogproba - minibatch_oldlogproba)
@@ -160,6 +161,7 @@ class MulProPPO:
                 else:
                     loss_value = torch.mean((minibatch_newvalues - minibatch_returns).pow(2))
 
+                # value normalization is not clear 
                 if self.args.lossvalue_norm:
                     minibatch_return_6std = 6 * minibatch_returns.std()
                     loss_value = (

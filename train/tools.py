@@ -226,11 +226,12 @@ class EnvPostProcsser:
         img_obs = self.surr_cnn_normalize(img_obs)
         self.surr_img_deque.append(img_obs)
         cnn_obs = numpy.concatenate(list(self.img_deque), axis=2)
-        env_state = torch.Tensor(cnn_obs).float().unsqueeze(0).permute(0, 3, 2, 1)
-        return env_state
+        sur_state = torch.Tensor(cnn_obs).float().unsqueeze(0).permute(0, 3, 2, 1)
+        return sur_state
 
     def assemble_surr_vec_obs(self, observation):
-        curr_xy = (observation["player"]["status"][0], observation["player"]["status"][1])
+        curr_xy = (observation["player"]["status"][0],  # 车辆后轴中心位置 x
+                   observation["player"]["status"][1])  # 车辆后轴中心位置 y 
         npc_info_dict = {}
         
         for npc_info in observation["npcs"]:
@@ -239,37 +240,41 @@ class EnvPostProcsser:
             npc_info_dict[
                 numpy.sqrt((npc_info[2] - curr_xy[0]) ** 2 + (npc_info[3] - curr_xy[1]) ** 2)
             ] = [
-                npc_info[2] - curr_xy[0],
-                npc_info[3] - curr_xy[1],
-                npc_info[4],
-                numpy.sqrt(npc_info[5] ** 2 + npc_info[6] ** 2),
-                numpy.sqrt(npc_info[7] ** 2 + npc_info[8] ** 2),
-                npc_info[9],
-                npc_info[10],
+                npc_info[2] - curr_xy[0], # dx
+                npc_info[3] - curr_xy[1], # dy
+                npc_info[4], # 障碍物朝向
+                numpy.sqrt(npc_info[5] ** 2 + npc_info[6] ** 2), # 障碍物速度大小（标量）
+                numpy.sqrt(npc_info[7] ** 2 + npc_info[8] ** 2), # 障碍物加速度大小（标量）
+                npc_info[9], # 障碍物宽度
+                npc_info[10], # 障碍物长度
             ]
+         # 按距离由近至远排序
         sorted_npc_info_dict = dict(sorted(npc_info_dict.items(), key=lambda x: x[0]))
         surr_obs_list = list(sorted_npc_info_dict.values())
+         # 若数量不足surr_number则补齐
         for _ in range(self.surr_number - len(surr_obs_list)):
             surr_obs_list.append(list(numpy.zeros(self.surr_vec_length)))
-            
+        # 截断 
         curr_surr_obs = numpy.array(surr_obs_list).reshape(-1)[: self.surr_number * 7]
+        # 归一化
         curr_surr_obs = self.surr_vec_normalize(curr_surr_obs)
+        # 加入到末尾帧
         self.surr_vec_deque.append(curr_surr_obs.reshape(1, -1))
         surr_vec_obs = numpy.concatenate(list(self.surr_vec_deque), axis=0)[numpy.newaxis, :, :]
-        env_state = torch.Tensor(surr_vec_obs).float().unsqueeze(0)
-        return env_state
+        sur_state = torch.Tensor(surr_vec_obs).float().unsqueeze(0)
+        return sur_state
 
     def assemble_ego_vec_obs(self, observation):
         target_xy = (
-            (observation["player"]["target"][0] + observation["player"]["target"][4]) / 2,
-            (observation["player"]["target"][1] + observation["player"]["target"][5]) / 2,
+            (observation["player"]["target"][0] + observation["player"]["target"][4]) / 2, # 目标区域中心位置x
+            (observation["player"]["target"][1] + observation["player"]["target"][5]) / 2, # 目标区域中心位置y
         )
-        curr_xy = (observation["player"]["status"][0], observation["player"]["status"][1])
-        delta_xy = (target_xy[0] - curr_xy[0], target_xy[1] - curr_xy[1])
-        curr_yaw = observation["player"]["status"][2]
-        curr_velocity = observation["player"]["status"][3]
-        prev_steer = observation["player"]["status"][7]
-        prev_acc = observation["player"]["status"][8]
+        curr_xy = (observation["player"]["status"][0], observation["player"]["status"][1]) # 当前车辆位置
+        delta_xy = (target_xy[0] - curr_xy[0], target_xy[1] - curr_xy[1]) # 目标区域与当前位置的绝对偏差
+        curr_yaw = observation["player"]["status"][2] # 当前朝向
+        curr_velocity = observation["player"]["status"][3] # 当前车辆后轴中心纵向速度
+        prev_steer = observation["player"]["status"][7] # 上一个前轮转角命令
+        prev_acc = observation["player"]["status"][8] # 上一个加速度命令
         lane_list = []
         
         for lane_info in observation["map"].lanes:
@@ -278,21 +283,23 @@ class EnvPostProcsser:
         current_offset = observation["map"].lane_offset
         vec_obs = numpy.array(
             [
-                delta_xy[0],
-                delta_xy[1],
-                curr_yaw,
-                curr_velocity,
-                prev_steer,
-                prev_acc,
-                current_lane_index,
-                current_offset,
+                delta_xy[0],  # 目标区域与当前位置的偏差x
+                delta_xy[1],  # 目标区域与当前位置的偏差y
+                curr_yaw,  # 当前车辆的朝向角
+                curr_velocity,  # 车辆后轴当前纵向速度
+                prev_steer,  # 上一个前轮转角命令
+                prev_acc,  # 上一个加速度命令
+                current_lane_index,  # 当前所处车道的id
+                current_offset,  # 车道的偏移量
             ]
         )
+        # 归一化
         vec_obs = self.vec_normalize(vec_obs)
+        # 添加到末尾帧
         self.vec_deque.append(vec_obs)
         mlp_obs = numpy.concatenate(list(self.vec_deque), axis=0)
-        vec_state = torch.Tensor(mlp_obs).float().unsqueeze(0)
-        return vec_state
+        ego_state = torch.Tensor(mlp_obs).float().unsqueeze(0)
+        return ego_state
 
     def assemble_reward(self, observation: Dict, info: Dict) -> float:
         target_xy = (
