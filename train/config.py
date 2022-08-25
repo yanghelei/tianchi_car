@@ -29,12 +29,13 @@ class PolicyParam:
     clip: float = 0.2
     lr: float = 1e-4
     vf_clip_param: float = 60.0
+    #field 用法??
     lr_schedule: List = field(default_factory=[[0, 0.0001], [2000000, 5e-05], [3000000, 1e-05]])
     EPS: float = 1e-10
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
 
     schedule_adam: str = "fix"
-    schedule_clip: str = "linear"
+    schedule_clip: str = "fix"
     layer_norm: bool = True
     advantage_norm: bool = True
     use_clipped_value_loss: bool = True

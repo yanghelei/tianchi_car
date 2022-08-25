@@ -42,13 +42,12 @@ class CnnFeatureNet(nn.Module):
         mt_tmp = torch.flatten(mt_tmp, 1)
         return mt_tmp
 
-
 class TimeVecFeatureNet(nn.Module):
     def __init__(self, input_shape, num, hidden_size):
         """
         input_shape is the vector length; num is the number of sequence;  
         """
-        super.__init__()
+        super().__init__()
         self.hidden_size = hidden_size
         self.layer_1 = nn.Linear(input_shape, hidden_size)
         self.layer_2 = nn.Linear(num, 1)
@@ -110,17 +109,20 @@ class PPOPolicy(nn.Module):
         logits = self.actor_logit(env_feature)
         action_logit = self.logit(logits)
         action_mean, action_logstd = torch.chunk(action_logit, 2, dim=-1)
-        values = self.critic_value(env_feature)
-        return action_mean, action_logstd, values
+
+        return action_mean, action_logstd
 
     def _forward_critic(self, env_feature):
 
         values = self.critic_value(env_feature)
+
         return values
 
     def forward(self, sur_obs, ego_obs):
-        action_mean, action_logstd = self._forward_actor(sur_obs, ego_obs)
-        critic_value = self._forward_critic(sur_obs, ego_obs)
+        
+        env_feature = self.get_env_feature(sur_obs, ego_obs)
+        action_mean, action_logstd = self._forward_actor(env_feature)
+        critic_value = self._forward_critic(env_feature)
         return action_mean, action_logstd, critic_value
 
     def select_action(self, action_mean, action_logstd):

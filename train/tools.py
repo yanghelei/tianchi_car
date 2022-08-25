@@ -260,7 +260,7 @@ class EnvPostProcsser:
         curr_surr_obs = self.surr_vec_normalize(curr_surr_obs)
         # 加入到末尾帧
         self.surr_vec_deque.append(curr_surr_obs.reshape(1, -1))
-        surr_vec_obs = numpy.concatenate(list(self.surr_vec_deque), axis=0)[numpy.newaxis, :, :]
+        surr_vec_obs = numpy.concatenate(list(self.surr_vec_deque), axis=0)
         sur_state = torch.Tensor(surr_vec_obs).float().unsqueeze(0)
         return sur_state
 
@@ -297,7 +297,7 @@ class EnvPostProcsser:
         vec_obs = self.vec_normalize(vec_obs)
         # 添加到末尾帧
         self.vec_deque.append(vec_obs)
-        mlp_obs = numpy.concatenate(list(self.vec_deque), axis=0)
+        mlp_obs = numpy.array(list(self.vec_deque))
         ego_state = torch.Tensor(mlp_obs).float().unsqueeze(0)
         return ego_state
 

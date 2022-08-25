@@ -13,7 +13,7 @@ import torch.nn as nn
 import torch.optim as opt
 import sys 
 sys.path.append(os.path.split(os.path.dirname(os.path.abspath(__file__)))[0] + '/')
-# from tensorboardX import SummaryWriter
+from tensorboardX import SummaryWriter
 from train.config import PolicyParam
 from train.policy import PPOPolicy
 from train.workers import MemorySampler
@@ -22,9 +22,8 @@ from geek.env.logger import Logger
 logger = Logger.get_logger(__name__)
 
 class MulProPPO:
-    def __init__(self, obs_type, logger) -> None:
+    def __init__(self, logger) -> None:
         self.args = PolicyParam
-        self.obs_type = obs_type
         self.logger = logger
         self.global_sample_size = 0
         self._make_dir()
@@ -79,7 +78,7 @@ class MulProPPO:
             os.makedirs(self.model_dir)
         except:
             print("file is existed")
-        # self.writer = SummaryWriter(self.exp_dir)
+        self.writer = SummaryWriter(self.exp_dir)
 
     def train(self):
         for i_episode in range(self.args.num_episode):
@@ -151,6 +150,7 @@ class MulProPPO:
                 surr2 = ratio.clamp(1 - self.clip_now, 1 + self.clip_now) * minibatch_advantages
                 loss_surr = -torch.mean(torch.min(surr1, surr2))
 
+                # clip value (防止value变化过快)
                 if self.args.use_clipped_value_loss:
                     value_pred_clipped = minibatch_values + (
                         minibatch_newvalues - minibatch_values
@@ -162,14 +162,14 @@ class MulProPPO:
                     loss_value = torch.mean((minibatch_newvalues - minibatch_returns).pow(2))
 
                 # value normalization is not clear 
-                if self.args.lossvalue_norm:
-                    minibatch_return_6std = 6 * minibatch_returns.std()
-                    loss_value = (
-                        torch.mean((minibatch_newvalues - minibatch_returns).pow(2))
-                        / minibatch_return_6std
-                    )
-                else:
-                    loss_value = torch.mean((minibatch_newvalues - minibatch_returns).pow(2))
+                # if self.args.lossvalue_norm:
+                #     minibatch_return_6std = 6 * minibatch_returns.std()
+                #     loss_value = (
+                #         torch.mean((minibatch_newvalues - minibatch_returns).pow(2))
+                #         / minibatch_return_6std
+                #     )
+                # else:
+                #     loss_value = torch.mean((minibatch_newvalues - minibatch_returns).pow(2))
 
                 loss_entropy = -torch.mean(entropy)
 
@@ -183,17 +183,23 @@ class MulProPPO:
                 nn.utils.clip_grad_norm_(self.model.parameters(), self.args.max_grad_norm)
                 self.optimizer.step()
 
+            # clip linearly decreanse
             if self.args.schedule_clip == "linear":
                 ep_ratio = 1 - ((i_episode) / self.args.num_episode)
                 self.clip_now = self.args.clip * ep_ratio
+            
+            if self.args.schedule_clip == "fix":
+                ep_ratio = 1 
+                self.clip_now = self.args.clip * ep_ratio
 
+            # lr linearly decrease
             if self.args.schedule_adam == "linear":
                 ep_ratio = 1 - ((i_episode) / self.args.num_episode)
                 lr_now = self.args.lr * ep_ratio
                 for g in self.optimizer.param_groups:
                     g["lr"] = lr_now
-                iteration_reduce = self.args.lr * (1 - ep_ratio)
-
+                iteration_reduce = self.args.lr * (1 - ep_ratio) # reduce 
+            # 分段式调整 
             if self.args.schedule_adam == "layer":
                 for item in self.args.lr_schedule:
                     if self.global_sample_size >= item[0]:
@@ -201,7 +207,7 @@ class MulProPPO:
                 for g in self.optimizer.param_groups:
                     g["lr"] = lr_now
                 iteration_reduce = 0.0
-
+            # 分段式+线性衰减
             if self.args.schedule_adam == "layer_linear":
                 for idx, item in enumerate(self.args.lr_schedule):
                     if self.global_sample_size >= item[0]:
@@ -252,9 +258,9 @@ class MulProPPO:
                 self.logger.info(
                     "lr now: " + str(lr_now) + "  lr reduce per iteration: " + str(iteration_reduce)
                 )
-                # self.writer.add_scalar("reward", reward, i_episode)
-                # self.writer.add_scalar("total_loss", total_loss, i_episode)
-                # self.writer.add_scalar("reach_goal_rate", reach_goal_rate, i_episode)
+                self.writer.add_scalar("reward", reward, i_episode)
+                self.writer.add_scalar("total_loss", total_loss, i_episode)
+                self.writer.add_scalar("reach_goal_rate", reach_goal_rate, i_episode)
             if i_episode % self.args.save_num_episode == 0:
                 torch.save(
                     self.model.state_dict(), self.model_dir + "network_{}.pth".format(i_episode)
@@ -263,8 +269,8 @@ class MulProPPO:
 
 
 if __name__ == "__main__":
+    os.environ["OMP_NUM_THREADS"] = "1"  # Necessary for multithreading.
     torch.set_num_threads(1)
     
-    obs_type = "cnn"
-    mpp = MulProPPO(obs_type=obs_type, logger=logger)
+    mpp = MulProPPO(logger=logger)
     mpp.train()
