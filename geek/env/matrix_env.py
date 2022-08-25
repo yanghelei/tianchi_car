@@ -20,8 +20,7 @@ class Scenarios(Enum):
 
 
 class DoneReason:
-    COLLISION_ON_ROAD = "CollidedOnRoad"
-    COLLISION_ON_OBJECT = "CollidedOnObject"
+    COLLIDED = "collided"
     TIMEOUT = "Timeout"
     MAX_EXP_STEP = "MaxExpStep"
     INFERENCE_DONE = "InferenceDone"
@@ -152,8 +151,7 @@ class MatrixEnv(ABC, gym.Env):
                                                 （3）超时，时限根据场景不同
 
                                 Info：{"DoneReason": 
-                                     # "CollidedOnRoad", 
-                                     # "CollidedOnObject",
+                                     # "collided", 
                                      # "Timeout", 
                                      # "MaxExpStep"
                                      # "RuntimeError", 运行时异常, 此时可忽略当前帧
