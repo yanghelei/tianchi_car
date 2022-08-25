@@ -21,7 +21,7 @@ Transition = namedtuple(
     "Transition",
     ("sur_obs", "vec_obs", "value", "action", "logproba", "mask", "reward", "info"),
 )
-Get_Enough_Batch = mp.Value("i", 0)
+Get_Enough_Batch = mp.Value("i", 0) # 标志位：是否采集了足够的样本数
 
 logger = Logger.get_logger(__name__)
 

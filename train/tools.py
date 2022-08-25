@@ -16,6 +16,7 @@ import torch.nn as nn
 from cvxpy import vec
 from train.config import PolicyParam
 from train.np_image import NPImage
+from utils.norm import Normalization
 
 STD = 2 ** 0.5
 
@@ -29,55 +30,55 @@ def file_name(file_dir, file_type):
     return L
 
 
-class RunningMeanStd:
-    # Dynamically calculate mean and std
-    def __init__(self, shape):  # shape:the dimension of input data
-        self.n = 0
-        self.mean = numpy.zeros(shape)
-        self.S = numpy.zeros(shape)
-        self.std = numpy.sqrt(self.S)
+# class RunningMeanStd:
+#     # Dynamically calculate mean and std
+#     def __init__(self, shape):  # shape:the dimension of input data
+#         self.n = 0
+#         self.mean = numpy.zeros(shape)
+#         self.S = numpy.zeros(shape)
+#         self.std = numpy.sqrt(self.S)
 
-    def update(self, x):
-        x = numpy.array(x)
-        self.n += 1
-        if self.n == 1:
-            self.mean = x
-            self.std = x
-        else:
-            old_mean = self.mean.copy()
-            self.mean = old_mean + (x - old_mean) / self.n
-            self.S = self.S + (x - old_mean) * (x - self.mean)
-            self.std = numpy.sqrt(self.S / self.n)
-
-
-class RewardScaling:
-    def __init__(self, shape, gamma):
-        self.shape = shape  # reward shape=1
-        self.gamma = gamma  # discount factor
-        self.running_ms = RunningMeanStd(shape=self.shape)
-        self.R = numpy.zeros(self.shape)
-
-    def __call__(self, x):
-        self.R = self.gamma * self.R + x
-        self.running_ms.update(self.R)
-        x = x / (self.running_ms.std + 1e-8)  # Only divided std
-        return x
-
-    def reset(self):  # When an episode is done,we should reset 'self.R'
-        self.R = numpy.zeros(self.shape)
+#     def update(self, x):
+#         x = numpy.array(x)
+#         self.n += 1
+#         if self.n == 1:
+#             self.mean = x
+#             self.std = x
+#         else:
+#             old_mean = self.mean.copy()
+#             self.mean = old_mean + (x - old_mean) / self.n
+#             self.S = self.S + (x - old_mean) * (x - self.mean)
+#             self.std = numpy.sqrt(self.S / self.n)
 
 
-class Normalization:
-    def __init__(self, shape):
-        self.running_ms = RunningMeanStd(shape=shape)
+# class RewardScaling:
+#     def __init__(self, shape, gamma):
+#         self.shape = shape  # reward shape=1
+#         self.gamma = gamma  # discount factor
+#         self.running_ms = RunningMeanStd(shape=self.shape)
+#         self.R = numpy.zeros(self.shape)
 
-    def __call__(self, x, update=True):
-        # Whether to update the mean and std,during the evaluating,update=Flase
-        if update:
-            self.running_ms.update(x)
-        x = (x - self.running_ms.mean) / (self.running_ms.std + 1e-8)
+#     def __call__(self, x):
+#         self.R = self.gamma * self.R + x
+#         self.running_ms.update(self.R)
+#         x = x / (self.running_ms.std + 1e-8)  # Only divided std
+#         return x
 
-        return x
+#     def reset(self):  # When an episode is done,we should reset 'self.R'
+#         self.R = numpy.zeros(self.shape)
+
+
+# class Normalization:
+#     def __init__(self, shape):
+#         self.running_ms = RunningMeanStd(shape=shape)
+
+#     def __call__(self, x, update=True):
+#         # Whether to update the mean and std,during the evaluating,update=Flase
+#         if update:
+#             self.running_ms.update(x)
+#         x = (x - self.running_ms.mean) / (self.running_ms.std + 1e-8)
+
+#         return x
 
 
 def initialize_weights(mod, initialization_type, scale=STD):
@@ -199,37 +200,38 @@ class EnvPostProcsser:
         self.obs_type = self.args.obs_type
 
         self.prev_distance = None
-        self.surr_cnn_normalize = Normalization(shape=(self.img_width, self.img_length, 3))
-        self.vec_normalize = Normalization(shape=self.vec_length)
-        self.surr_vec_normalize = Normalization(shape=(1, self.surr_number * 7))
-        self.reward_scale = RewardScaling(shape=1, gamma=self.args.gamma)
-        self.surr_img_deque = collections.deque(maxlen=5)
-        self.surr_vec_deque = collections.deque(maxlen=5)
-        self.vec_deque = collections.deque(maxlen=5)
+        # self.surr_cnn_normalize = Normalization(shape=(self.img_width, self.img_length, 3))
+        # self.reward_scale = RewardScaling(shape=1, gamma=self.args.gamma) # not used
+        # self.surr_img_deque = collections.deque(maxlen=self.history_length)
+        # running mean std 
+        self.ego_vec_normalize = Normalization(8)
+        self.surr_vec_normalize = Normalization(70)
+        self.surr_vec_deque = collections.deque(maxlen=self.history_length)
+        self.vec_deque = collections.deque(maxlen=self.history_length)
         
         for i in range(self.history_length):
-            self.surr_img_deque.append(numpy.zeros((self.img_width, self.img_length, 3)))
-            self.surr_vec_deque.append(numpy.zeros((1, self.surr_number * 7)))
+            # self.surr_img_deque.append(numpy.zeros((self.img_width, self.img_length, 3)))
+            self.surr_vec_deque.append(numpy.zeros((1, self.surr_number * self.surr_vec_length)))
             self.vec_deque.append(numpy.zeros(self.vec_length))
-        self.tianchi_cnn = TianchiCNN()  # not used
+        # self.tianchi_cnn = TianchiCNN()  # not used
 
-    def assemble_surr_cnn_obs(self, observation, env):
-        """
-        not used
-        """
-        centers = {}
-        for lane in observation["map"].lanes:
-            lane_id = lane.lane_id
-            centers[lane_id] = env.centers_by_lane_id(lane_id)
+    # def assemble_surr_cnn_obs(self, observation, env):
+    #     """
+    #     not used
+    #     """
+    #     centers = {}
+    #     for lane in observation["map"].lanes:
+    #         lane_id = lane.lane_id
+    #         centers[lane_id] = env.centers_by_lane_id(lane_id)
             
-        img_obs = self.tianchi_cnn.draw_from_obs(observation, centers).astype(numpy.float32)
-        img_obs = self.surr_cnn_normalize(img_obs)
-        self.surr_img_deque.append(img_obs)
-        cnn_obs = numpy.concatenate(list(self.img_deque), axis=2)
-        sur_state = torch.Tensor(cnn_obs).float().unsqueeze(0).permute(0, 3, 2, 1)
-        return sur_state
+    #     img_obs = self.tianchi_cnn.draw_from_obs(observation, centers).astype(numpy.float32)
+    #     img_obs = self.surr_cnn_normalize(img_obs)
+    #     self.surr_img_deque.append(img_obs)
+    #     cnn_obs = numpy.concatenate(list(self.img_deque), axis=2)
+    #     sur_state = torch.Tensor(cnn_obs).float().unsqueeze(0).permute(0, 3, 2, 1)
+    #     return sur_state
 
-    def assemble_surr_vec_obs(self, observation):
+    def assemble_surr_vec_obs(self, observation, normalizer=None):
         curr_xy = (observation["player"]["status"][0],  # 车辆后轴中心位置 x
                    observation["player"]["status"][1])  # 车辆后轴中心位置 y 
         npc_info_dict = {}
@@ -256,11 +258,12 @@ class EnvPostProcsser:
             surr_obs_list.append(list(numpy.zeros(self.surr_vec_length)))
         # 截断 
         curr_surr_obs = numpy.array(surr_obs_list).reshape(-1)[: self.surr_number * 7]
-        # 归一化
-        curr_surr_obs = self.surr_vec_normalize(curr_surr_obs)
         # 加入到末尾帧
         self.surr_vec_deque.append(curr_surr_obs.reshape(1, -1))
         surr_vec_obs = numpy.concatenate(list(self.surr_vec_deque), axis=0)
+        # 归一化
+        self.surr_vec_normalize.update(surr_vec_obs[-1])
+        surr_vec_obs[-1] = self.surr_vec_normalize.normalize(surr_vec_obs[-1])
         sur_state = torch.Tensor(surr_vec_obs).float().unsqueeze(0)
         return sur_state
 
@@ -293,12 +296,14 @@ class EnvPostProcsser:
                 current_offset,  # 车道的偏移量
             ]
         )
-        # 归一化
-        vec_obs = self.vec_normalize(vec_obs)
         # 添加到末尾帧
         self.vec_deque.append(vec_obs)
         mlp_obs = numpy.array(list(self.vec_deque))
+        # 归一化
+        self.ego_vec_normalize.update(mlp_obs[-1])
+        mlp_obs[-1] = self.ego_vec_normalize.normalize(mlp_obs[-1])
         ego_state = torch.Tensor(mlp_obs).float().unsqueeze(0)
+        
         return ego_state
 
     def assemble_reward(self, observation: Dict, info: Dict) -> float:
@@ -338,10 +343,10 @@ class EnvPostProcsser:
 
     def reset(self):
         self.prev_distance = None
-        self.reward_scale.reset()
-        self.img_deque = collections.deque(maxlen=5)
+        # self.reward_scale.reset()
+        # self.img_deque = collections.deque(maxlen=5)
         self.vec_deque = collections.deque(maxlen=5)
         
         for _ in range(self.history_length):
-            self.img_deque.append(numpy.zeros((self.img_width, self.img_length, 3)))
+            # self.img_deque.append(numpy.zeros((self.img_width, self.img_length, 3)))
             self.vec_deque.append(numpy.zeros(self.vec_length))
