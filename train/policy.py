@@ -13,7 +13,7 @@ import torch.nn.functional as F
 from train.config import PolicyParam
 from train.tools import initialize_weights
 import numpy as np 
-
+from torch.distributions.normal import Normal
 
 class CnnFeatureNet(nn.Module):
     def __init__(self):
@@ -68,18 +68,19 @@ class PPOPolicy(nn.Module):
         self.policy_param = PolicyParam
         self.sur_feature_net = TimeVecFeatureNet(70, 5, 128)
         self.ego_feature_net = TimeVecFeatureNet(8, 5, 128)
-        self.actor_logit = nn.Sequential(
+        self.actor_net = nn.Sequential(
             OrderedDict(
                 [
                     ("actor_1", nn.Linear(256, 256)),
                     ("actor_relu_1", nn.ReLU()),
                     ("actor_2", nn.Linear(256, 256)),
                     ("actor_relu_2", nn.ReLU()),
+                    ("actor_mu", nn.Linear(256, num_outputs)),
                 ]
             )
         )
 
-        self.critic_value = nn.Sequential(
+        self.critic_net = nn.Sequential(
             OrderedDict(
                 [
                     ("critic_1", nn.Linear(256, 256)),
@@ -91,7 +92,8 @@ class PPOPolicy(nn.Module):
             )
         )
 
-        self.logit = nn.Sequential(nn.Linear(256, num_outputs * 2), nn.Tanh())
+        # std is independent of the states (empirically better)
+        self.log_std = torch.nn.Parameter(torch.zeros(num_outputs))
 
         initialize_weights(self, "orthogonal", scale = np.sqrt(2))
 
@@ -104,44 +106,45 @@ class PPOPolicy(nn.Module):
 
         return env_feature
 
-    def _forward_actor(self, env_feature):
+    def get_value(self, env_feature):
 
-        logits = self.actor_logit(env_feature)
-        action_logit = self.logit(logits)
-        action_mean, action_logstd = torch.chunk(action_logit, 2, dim=-1)
-
-        return action_mean, action_logstd
-
-    def _forward_critic(self, env_feature):
-
-        values = self.critic_value(env_feature)
+        values = self.critic_net(env_feature)
 
         return values
 
-    def forward(self, sur_obs, ego_obs):
-        
+    def select_action(self, sur_obs, ego_obs, deterministic=False):
         env_feature = self.get_env_feature(sur_obs, ego_obs)
-        action_mean, action_logstd = self._forward_actor(env_feature)
-        critic_value = self._forward_critic(env_feature)
-        return action_mean, action_logstd, critic_value
-
-    def select_action(self, action_mean, action_logstd):
-        action_std = torch.exp(action_logstd)
-        action = torch.normal(action_mean, action_std)
-        logproba = self._normal_logproba(action, action_mean, action_logstd, action_std)
-        return action, logproba
+        action_mean = self.actor_net(env_feature)
+        value = self.critic_net(env_feature)
+        action_std = torch.exp(self.log_std)
+        action_distribution = Normal(action_mean, action_std)
+        # 采样
+        if deterministic:
+            gaussian_action = action_distribution.sample()
+        else:
+            gaussian_action = action_mean
+        logproba = self._cal_tanhlogproba(action_distribution, gaussian_action)
+        # 裁剪到[-1, 1]
+        tanh_action = torch.tanh(gaussian_action)
+        return tanh_action, gaussian_action, logproba, value
 
     @staticmethod
-    def _normal_logproba(x, mean, logstd, std=None):
-        if std is None:
-            std = torch.exp(logstd)
+    def _cal_tanhlogproba(pi_distribution, pi_action):
+        # 计算经过tanh之后的分布的logporba (参照spinningup的SAC实现)
+        logp_pi = pi_distribution.log_prob(pi_action).sum(axis=-1)
+        logp_pi -= (2*(np.log(2) - pi_action - F.softplus(-2*pi_action))).sum(axis=1)
+        return logp_pi
 
-        std_sq = std.pow(2)
-        logproba = -0.5 * math.log(2 * math.pi) - logstd - (x - mean).pow(2) / (2 * std_sq)
-        return logproba.sum(1)
+    def eval(self, env_feature, actions, gussian=True):
+        
+        # 先转化成gaussian_action (invese tanh)
+        if not gussian:
+            from utils.util import TanhBijector
+            actions = TanhBijector.inverse(actions) 
 
-    def get_logproba(self, env_feature, actions):
-        action_mean, action_logstd = self._forward_actor(env_feature)
-        logproba = self._normal_logproba(actions, action_mean, action_logstd)
-        entropy = torch.distributions.Normal(action_mean, torch.exp(action_logstd)).entropy()
-        return logproba, entropy
+        action_mean = self.actor_net(env_feature)
+        action_std = torch.exp(self.log_std)
+        action_distribution = Normal(action_mean, action_std)
+        logp_pi = self._cal_tanhlogproba(action_distribution, actions)
+
+        return logp_pi

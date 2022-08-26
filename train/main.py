@@ -81,13 +81,14 @@ class MulProPPO:
             print("file is existed")
         self.writer = SummaryWriter(self.exp_dir)
 
-    def update(self, batch):
+    def update(self, batch, episode):
         
         batch_size = self.args.batch_size
         rewards = torch.from_numpy(np.array(batch.reward))
         values = torch.from_numpy(np.array(batch.value))
         masks = torch.from_numpy(np.array(batch.mask))
         actions = torch.from_numpy(np.array(batch.action))
+        gaussian_actions = torch.from_numpy(np.array(batch.gaussian_action))
         sur_obs = torch.from_numpy(np.array(batch.sur_obs))
         vec_obs = torch.from_numpy(np.array(batch.vec_obs))
         oldlogproba = torch.from_numpy(np.array(batch.logproba))
@@ -116,6 +117,7 @@ class MulProPPO:
         values = values.to(self.args.device)
         vec_obs = vec_obs.to(self.args.device)
         actions = actions.to(self.args.device)
+        gaussian_actions = gaussian_actions.to(self.args.device)
         oldlogproba = oldlogproba.to(self.args.device)
         advantages = advantages.to(self.args.device)
         returns = returns.to(self.args.device)
@@ -130,15 +132,19 @@ class MulProPPO:
             minibatch_actions = actions[minibatch_ind]
             minibatch_values = values[minibatch_ind]
             minibatch_oldlogproba = oldlogproba[minibatch_ind]
-            minibatch_newlogproba, entropy = self.model.get_logproba(
-                minibatch_env_state, minibatch_actions
-            )
+            minibatch_gussain_actions = gaussian_actions[minibatch_ind]
+            minibatch_newlogproba = self.model.eval(
+                minibatch_env_state, minibatch_gussain_actions
+            )                
+            loss_entropy = minibatch_newlogproba.mean() # this is -entropy
             minibatch_advantages = advantages[minibatch_ind]
             minibatch_returns = returns[minibatch_ind]
-            minibatch_newvalues = self.model._forward_critic(minibatch_env_state).flatten()
+            minibatch_newvalues = self.model.get_value(minibatch_env_state).flatten()
 
             assert minibatch_oldlogproba.shape == minibatch_newlogproba.shape
-            ratio = torch.exp(minibatch_newlogproba - minibatch_oldlogproba)
+            log_ratio = minibatch_newlogproba - minibatch_oldlogproba
+            ratio = torch.exp(log_ratio)
+            approx_kl = torch.mean((torch.exp(log_ratio) - 1) - log_ratio).item() # aprroximate the kl
             assert ratio.shape == minibatch_advantages.shape
             surr1 = ratio * minibatch_advantages
             surr2 = ratio.clamp(1 - self.clip_now, 1 + self.clip_now) * minibatch_advantages
@@ -149,8 +155,8 @@ class MulProPPO:
                 value_pred_clipped = minibatch_values + (
                     minibatch_newvalues - minibatch_values
                 ).clamp(-self.args.vf_clip_param, self.args.vf_clip_param)
-                value_losses = (minibatch_newvalues - minibatch_returns).pow(2)
-                value_loss_clip = (value_pred_clipped - minibatch_returns).pow(2)
+                value_losses = 0.5*(minibatch_newvalues - minibatch_returns).pow(2)
+                value_loss_clip = 0.5*(value_pred_clipped - minibatch_returns).pow(2)
                 loss_value = torch.max(value_losses, value_loss_clip).mean()
             else:
                 loss_value = torch.mean((minibatch_newvalues - minibatch_returns).pow(2))
@@ -164,14 +170,15 @@ class MulProPPO:
             #     )
             # else:
             #     loss_value = torch.mean((minibatch_newvalues - minibatch_returns).pow(2))
-
-            loss_entropy = -torch.mean(entropy)
-
+            
             total_loss = (
                 loss_surr
                 + self.args.loss_coeff_value * loss_value
                 + self.args.loss_coeff_entropy * loss_entropy
             )
+            if self.args.use_target_kl:
+                if approx_kl > 1.5*self.args.target_kl:
+                    self.logger.info(f'Episode:{episode} Early stopping at epoch {i_epoch} due to reaching max kl.')
             self.optimizer.zero_grad()
             total_loss.backward()
             nn.utils.clip_grad_norm_(self.model.parameters(), self.args.max_grad_norm)
@@ -228,18 +235,19 @@ class MulProPPO:
     def train(self):
     
         for i_episode in range(self.args.num_episode):
-            self.logger.info(
-                "----------------------" + str(i_episode) + "-------------------------"
-            )
+
             memory = self.sampler.sample(self.model)
             batch = memory.sample()
             batch_size = len(memory)
             self.global_sample_size += batch_size
             # update policy
-            total_loss, loss_surr, loss_value, loss_entropy, rewards = self.update(batch)
+            total_loss, loss_surr, loss_value, loss_entropy, rewards = self.update(batch, i_episode)
             # schedule lr and clip
             lr_now, lr_iteration_reduce = self.schedule(i_episode)
             if i_episode % self.args.log_num_episode == 0:
+                self.logger.info(
+                "----------------------" + str(i_episode) + "-------------------------"
+                                ) 
                 mean_reward = (torch.sum(rewards) / memory.num_episode).data
                 mean_step = len(memory) // memory.num_episode
                 reach_goal_rate = memory.arrive_goal_num / memory.num_episode

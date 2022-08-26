@@ -19,7 +19,7 @@ from train.tools import EnvPostProcsser
 
 Transition = namedtuple(
     "Transition",
-    ("sur_obs", "vec_obs", "value", "action", "logproba", "mask", "reward", "info"),
+    ("sur_obs", "vec_obs", "value", "action", 'gaussian_action', "logproba", "mask", "reward", "info",),
 )
 Get_Enough_Batch = mp.Value("i", 0) # 标志位：是否采集了足够的样本数
 
@@ -91,26 +91,23 @@ class EnvWorker(mp.Process):
                         vec_state = self.env_post_processer.assemble_ego_vec_obs(obs)
                         while Get_Enough_Batch.value == 0:
                             with torch.no_grad():
-                                action_mean, action_logstd, value = policy(env_state, vec_state)
-                                action, logproba = policy.select_action(action_mean, action_logstd)
+                                action, gaussian_action, logproba, value = policy.select_action(env_state, vec_state)
                                 action = action.data.cpu().numpy()[0]
                                 logproba = logproba.data.cpu().numpy()[0]
                                 value = value.data.cpu().numpy()[0][0]
+                                gaussian_action = gaussian_action.data.cpu().numpy()[0]
                                 env_state = env_state.data.cpu().numpy()[0]
                                 vec_state = vec_state.data.cpu().numpy()[0]
-                            steer = self.lmap(
-                                np.clip(action[0], -1.0, 1.0),
-                                [-1.0, 1.0],
-                                [-0.39269908, 0.39269908],
-                            )
-                            acc = self.lmap(np.clip(action[1], -1.0, 1.0), [-1.0, 1.0], [-2.0, 2.0])
+                            # 线性映射到环境区间
+                            steer = self.lmap(action[0],[-1.0, 1.0],[-0.3925, 0.3925],)
+                            acc = self.lmap(action[1], [-1.0, 1.0], [-6.0, 2.0])
                             obs, reward, done, info = self.env.step(np.array([steer, acc]))
                             new_env_state = self.env_post_processer.assemble_surr_obs(obs, self.env)
                             new_vec_state = self.env_post_processer.assemble_ego_vec_obs(obs)
                             reward = self.env_post_processer.assemble_reward(obs, info)
                             mask = 0 if done else 1
                             episode.push(
-                                env_state, vec_state, value, action, logproba, mask, reward, info
+                                env_state, vec_state, value, action, gaussian_action, logproba, mask, reward, info,
                             )
                             if done:
                                 with self.lock:
