@@ -184,3 +184,7 @@ class MatrixEnv(ABC, gym.Env):
 
     def instance_key(self) -> str:
         return self.key_
+
+
+if __name__ == '__main__':
+    l = LaneInfo()
