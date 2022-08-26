@@ -17,6 +17,7 @@ from cvxpy import vec
 from train.config import PolicyParam
 from train.np_image import NPImage
 from utils.norm import Normalization
+import numpy as np 
 
 STD = 2 ** 0.5
 
@@ -230,8 +231,8 @@ class EnvPostProcsser:
     #     cnn_obs = numpy.concatenate(list(self.img_deque), axis=2)
     #     sur_state = torch.Tensor(cnn_obs).float().unsqueeze(0).permute(0, 3, 2, 1)
     #     return sur_state
+    def process_surr_vec_obs(self, observation) -> np.array :
 
-    def assemble_surr_vec_obs(self, observation, normalizer=None):
         curr_xy = (observation["player"]["status"][0],  # 车辆后轴中心位置 x
                    observation["player"]["status"][1])  # 车辆后轴中心位置 y 
         npc_info_dict = {}
@@ -258,16 +259,23 @@ class EnvPostProcsser:
             surr_obs_list.append(list(numpy.zeros(self.surr_vec_length)))
         # 截断 
         curr_surr_obs = numpy.array(surr_obs_list).reshape(-1)[: self.surr_number * 7]
+
+        return curr_surr_obs
+
+    def assemble_surr_vec_obs(self, observation) -> torch.tensor:
+        
+        curr_surr_obs = self.process_surr_vec_obs(observation)
         # 加入到末尾帧
-        self.surr_vec_deque.append(curr_surr_obs.reshape(1, -1))
-        surr_vec_obs = numpy.concatenate(list(self.surr_vec_deque), axis=0)
+        self.surr_vec_deque.append(curr_surr_obs)
+        surr_vec_obs = np.array(list(self.surr_vec_deque))
         # 归一化
         self.surr_vec_normalize.update(surr_vec_obs[-1])
         surr_vec_obs[-1] = self.surr_vec_normalize.normalize(surr_vec_obs[-1])
         sur_state = torch.Tensor(surr_vec_obs).float().unsqueeze(0)
         return sur_state
 
-    def assemble_ego_vec_obs(self, observation):
+    def process_ego_vec_obs(self, observation) -> np.array:
+
         target_xy = (
             (observation["player"]["target"][0] + observation["player"]["target"][4]) / 2, # 目标区域中心位置x
             (observation["player"]["target"][1] + observation["player"]["target"][5]) / 2, # 目标区域中心位置y
@@ -296,6 +304,12 @@ class EnvPostProcsser:
                 current_offset,  # 车道的偏移量
             ]
         )
+
+        return vec_obs
+
+    def assemble_ego_vec_obs(self, observation) -> torch.tensor:
+        
+        vec_obs = self.process_ego_vec_obs(observation)
         # 添加到末尾帧
         self.vec_deque.append(vec_obs)
         mlp_obs = numpy.array(list(self.vec_deque))
@@ -341,12 +355,15 @@ class EnvPostProcsser:
         else:
             raise Exception("error observation type")
 
-    def reset(self):
+    def reset(self, initial_obs):
         self.prev_distance = None
         # self.reward_scale.reset()
         # self.img_deque = collections.deque(maxlen=5)
+        # 填充初始帧
+        ego_vec_state = self.process_ego_vec_obs(initial_obs)
+        sur_vec_state = self.process_surr_vec_obs(initial_obs)
         self.vec_deque = collections.deque(maxlen=5)
-        
-        for _ in range(self.history_length):
-            # self.img_deque.append(numpy.zeros((self.img_width, self.img_length, 3)))
-            self.vec_deque.append(numpy.zeros(self.vec_length))
+        self.surr_vec_deque = collections.deque(maxlen=5)
+        for i in range(self.history_length):
+            self.vec_deque.append(ego_vec_state)
+            self.surr_vec_deque.append(sur_vec_state)

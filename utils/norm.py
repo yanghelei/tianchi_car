@@ -77,3 +77,8 @@ class Normalization(nn.Module):
         out = out.cpu().numpy()
         
         return out
+
+    def load_model(self, model_path, device):
+
+        self.load_state_dict(torch.load(model_path, map_location=device))
+

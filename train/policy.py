@@ -93,11 +93,10 @@ class PPOPolicy(nn.Module):
         )
 
         # std is independent of the states (empirically better)
-        self.log_std = torch.nn.Parameter(torch.zeros(num_outputs))
+        self.log_std = torch.nn.Parameter(torch.zeros(num_outputs), requires_grad=True)
 
         initialize_weights(self, "orthogonal", scale = np.sqrt(2))
 
-    
     def get_env_feature(self, sur_obs, ego_obs):
 
         ego_feature = self.ego_feature_net(ego_obs)
@@ -148,3 +147,6 @@ class PPOPolicy(nn.Module):
         logp_pi = self._cal_tanhlogproba(action_distribution, actions)
 
         return logp_pi
+
+    def load_model(self, model_path, device):
+        self.load_state_dict(torch.load(model_path, map_location=device))

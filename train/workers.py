@@ -72,8 +72,9 @@ class EnvWorker(mp.Process):
         self.env_post_processer = EnvPostProcsser()
         torch.manual_seed(seed)
         np.random.seed(seed)
-
-    def lmap(self, v: float, x: List, y: List) -> float:
+    
+    @staticmethod
+    def lmap(v: float, x: List, y: List) -> float:
         return y[0] + (v - x[0]) * (y[1] - y[0]) / (x[1] - x[0])
 
     def run(self):
@@ -86,7 +87,7 @@ class EnvWorker(mp.Process):
                     try:
                         episode = Episode()
                         obs = self.env.reset()
-                        self.env_post_processer.reset()
+                        self.env_post_processer.reset(obs)
                         env_state = self.env_post_processer.assemble_surr_obs(obs, self.env)
                         vec_state = self.env_post_processer.assemble_ego_vec_obs(obs)
                         while Get_Enough_Batch.value == 0:
@@ -177,3 +178,7 @@ class MemorySampler(object):
             remote.send(("close", None))
         for worker in self.workers:
             worker.join()
+
+    def save(self, path):
+        torch.save(self.workers[0].env_post_processer.ego_vec_normalize.state_dict(), path+'/ego_norm.pth')
+        torch.save(self.workers[0].env_post_processer.surr_vec_normalize.state_dict(), path+'/sur_norm.pth')

@@ -72,8 +72,8 @@ class MulProPPO:
 
     def _make_dir(self):
         current_dir = os.path.abspath(".")
-        self.exp_dir = current_dir + "/results/exp_{}/".format(time.time())
-        self.model_dir = current_dir + "/results/model_{}/".format(time.time())
+        self.exp_dir = current_dir + "/results/exp/"
+        self.model_dir = current_dir + "/results/model/"
         try:
             os.makedirs(self.exp_dir)
             os.makedirs(self.model_dir)
@@ -288,17 +288,20 @@ class MulProPPO:
 
             if i_episode % self.args.save_num_episode == 0:
                 torch.save(
-                    self.model.state_dict(), self.model_dir + "network_{}.pth".format(i_episode)
+                    self.model.state_dict(), self.model_dir + "network.pth"
                 )
+                self.sampler.save(self.model_dir)
             if (time.time() - self.start_time) > 9*3600:
                 torch.save(
-                    self.model.state_dict(), self.model_dir + "network_{}.pth".format(i_episode)
+                    self.model.state_dict(), self.model_dir + "network.pth"
                 )
+                self.sampler.save(self.model_dir)
                 import shutil
                 from pathlib import Path
                 # 存储到云端
-                save_path = Path(os.path.dirname(__file__)).parent.parent.resolve()
+                save_path = str(Path(os.path.dirname(__file__)).parent.parent.resolve() / 'myspace')
                 shutil.copy(self.model_dir + "network_{}.pth".format(i_episode), save_path)
+                self.sampler.save(save_path)
 
         self.sampler.close()
 

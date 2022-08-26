@@ -14,17 +14,33 @@ from geek.env.logger import Logger
 from geek.env.matrix_env import DoneReason, Scenarios
 
 logger = Logger.get_logger(__name__)
-
-
+from train.policy import PPOPolicy
+from train.tools import EnvPostProcsser
+from train.workers import EnvWorker
+from pathlib import Path
+model_dir = str(Path(os.path.dirname(__file__)) / 'results' / 'model')
 def run(worker_index):
     try:
         env = gym.make("MatrixEnv-v1", scenarios=Scenarios.INFERENCE)
+        model = PPOPolicy(2)
+        model.load_model(model_dir+'/network.pth', 'cpu')
+        env_post_processer = EnvPostProcsser()
+        env_post_processer.surr_vec_normalize.load_model(model_dir+"/sur_norm.pth", 'cpu')
+        env_post_processer.ego_vec_normalize.load_model(model_dir+"/ego_norm.pth", 'cpu')
         obs = env.reset()
+        env_post_processer.reset(obs)
         while True:
-            observation, reward, done, info = env.step(numpy.array([0.1, 0]))
+            env_state = env_post_processer.assemble_surr_obs(obs, env)
+            vec_state = env_post_processer.assemble_ego_vec_obs(obs)
+            action, _, _, _ = model.select_action(env_state, vec_state, True)
+            action = action.data.cpu().numpy()[0]
+            steer = EnvWorker.lmap(action[0],[-1.0, 1.0],[-0.3925, 0.3925],)
+            acc = EnvWorker.lmap(action[1], [-1.0, 1.0], [-6.0, 2.0])
+            obs, _, done, info = env.step(numpy.array([steer, acc]))
             infer_done = DoneReason.INFERENCE_DONE == info.get("DoneReason", "")
             if done and not infer_done:
-                obs = env.reset()
+                logger.info(f"env rest")
+                print(info)
             elif infer_done:
                 break
     except Exception as e:
@@ -33,7 +49,6 @@ def run(worker_index):
 
 if __name__ == "__main__":
     num_workers = 12
-
     pool = Pool(num_workers)
     pool_result = pool.map_async(run, list(range(num_workers)))
     pool_result.wait(timeout=3000)
