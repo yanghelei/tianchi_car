@@ -322,9 +322,9 @@ class EnvPostProcsser:
         return distance_reward + end_reward + step_reward
 
     def assemble_surr_obs(self, observation, env):
-        if self.obs_type is "cnn":
+        if self.obs_type == "cnn":
             return self.assemble_surr_cnn_obs(observation=observation, env=env)
-        elif self.obs_type is "vec":
+        elif self.obs_type == "vec":
             return self.assemble_surr_vec_obs(observation=observation)
         else:
             raise Exception("error observation type")

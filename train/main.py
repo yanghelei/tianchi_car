@@ -24,6 +24,7 @@ from geek.env.logger import Logger
 
 logger = Logger.get_logger(__name__)
 
+
 class MulProPPO:
     def __init__(self, obs_type, logger) -> None:
         self.args = PolicyParam
@@ -86,9 +87,7 @@ class MulProPPO:
 
     def train(self):
         for i_episode in range(self.args.num_episode):
-            self.logger.info(
-                "----------------------" + str(i_episode) + "-------------------------"
-            )
+            self.logger.info("----------------------" + str(i_episode) + "-------------------------")
             memory = self.sampler.sample(self.model)
             batch = memory.sample()
             batch_size = len(memory)
@@ -112,9 +111,7 @@ class MulProPPO:
             for i in reversed(range(batch_size)):
                 returns[i] = rewards[i] + self.args.gamma * prev_return * masks[i]
                 deltas[i] = rewards[i] + self.args.gamma * prev_value * masks[i] - values[i]
-                advantages[i] = (
-                    deltas[i] + self.args.gamma * self.args.lamda * prev_advantage * masks[i]
-                )
+                advantages[i] = (deltas[i] + self.args.gamma * self.args.lamda * prev_advantage * masks[i])
 
                 prev_return = returns[i]
                 prev_value = values[i]
@@ -156,7 +153,7 @@ class MulProPPO:
 
                 if self.args.use_clipped_value_loss:
                     value_pred_clipped = minibatch_values + (
-                        minibatch_newvalues - minibatch_values
+                            minibatch_newvalues - minibatch_values
                     ).clamp(-self.args.vf_clip_param, self.args.vf_clip_param)
                     value_losses = (minibatch_newvalues - minibatch_returns).pow(2)
                     value_loss_clip = (value_pred_clipped - minibatch_returns).pow(2)
@@ -167,8 +164,8 @@ class MulProPPO:
                 if self.args.lossvalue_norm:
                     minibatch_return_6std = 6 * minibatch_returns.std()
                     loss_value = (
-                        torch.mean((minibatch_newvalues - minibatch_returns).pow(2))
-                        / minibatch_return_6std
+                            torch.mean((minibatch_newvalues - minibatch_returns).pow(2))
+                            / minibatch_return_6std
                     )
                 else:
                     loss_value = torch.mean((minibatch_newvalues - minibatch_returns).pow(2))
@@ -176,9 +173,9 @@ class MulProPPO:
                 loss_entropy = -torch.mean(entropy)
 
                 total_loss = (
-                    loss_surr
-                    + self.args.loss_coeff_value * loss_value
-                    + self.args.loss_coeff_entropy * loss_entropy
+                        loss_surr
+                        + self.args.loss_coeff_value * loss_value
+                        + self.args.loss_coeff_entropy * loss_entropy
                 )
                 self.optimizer.zero_grad()
                 total_loss.backward()
@@ -266,7 +263,7 @@ class MulProPPO:
 
 if __name__ == "__main__":
     torch.set_num_threads(1)
-    
+
     obs_type = "cnn"
     mpp = MulProPPO(obs_type=obs_type, logger=logger)
     mpp.train()
