@@ -140,7 +140,7 @@ class MatrixEnv(ABC, gym.Env):
                                                                 中心点加速度y
                                                                 宽度
                                                                 长度
-                                        "maps": LaneInfo() 地图定义见LaneInfo
+                                        "map": LaneInfo() 地图定义见LaneInfo
                                         }
 
                                 Reward: 默认输出0，由选手自行设计
