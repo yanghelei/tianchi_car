@@ -124,7 +124,6 @@ class MyCollector(Collector):
             """ Batch 不支持 key 为 int 的字典，此处对 info 进行处理 """
             for _idx in range(len(info)):
                 agent_infos = dict()
-                data = info[_idx]['agent_infos']
                 for key, value in info[_idx]['agent_infos'].items():
                     agent_infos[str(key)] = value
                 info[_idx]['agent_infos'] = agent_infos

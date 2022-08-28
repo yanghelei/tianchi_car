@@ -12,7 +12,7 @@ config = dict(
     reward_threshold=None,
 
     eps_train=0.1,
-    eps_test=0.05,
+    eps_test=0.01,
 
     buffer_size=2e5,
 

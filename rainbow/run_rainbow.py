@@ -78,7 +78,7 @@ def train(cfgs):
 
     # collector
     train_collector = MyCollector(policy, train_envs, buf, preprocess_fn=train_processor.preprocess_fn, exploration_noise=True)
-    test_collector = MyCollector(policy, test_envs, preprocess_fn=test_processor.preprocess_fn, exploration_noise=True)
+    test_collector = MyCollector(policy, test_envs, preprocess_fn=test_processor.preprocess_fn, exploration_noise=False)
 
     train_collector.collect(n_step=cfgs.batch_size * cfgs.training_num)
 
@@ -117,6 +117,9 @@ def train(cfgs):
             else:
                 beta = cfgs.beta_final
             buf.set_beta(beta)
+
+    def test_fn(epoch, env_step):
+        policy.set_eps(cfgs.eps_test)
 
     def save_checkpoint_fn(epoch, env_step, gradient_step):
         # see also: https://pytorch.org/tutorials/beginner/saving_loading_models.html
@@ -163,7 +166,7 @@ def train(cfgs):
         batch_size=cfg.batch_size,
         update_per_step=cfg.update_per_step,
         train_fn=train_fn,
-        test_fn=None,
+        test_fn=test_fn,
         stop_fn=None,
         save_best_fn=save_best_fn,
         logger=logger,
