@@ -18,6 +18,7 @@ from train.config import PolicyParam
 from train.np_image import NPImage
 from utils.norm import Normalization
 import numpy as np 
+from geek.env.matrix_env import DoneReason
 
 STD = 2 ** 0.5
 
@@ -337,14 +338,28 @@ class EnvPostProcsser:
         self.prev_distance = distance_with_target
         step_reward = -0.5
 
-        if info["collided"]:
+        # if info["collided"]:
+        #     end_reward = -200
+        # elif info["reached_stoparea"]:
+        #     end_reward = 200
+        # elif info["timeout"]:
+        #     end_reward = -200
+        # else:
+        #     end_reward = 0.0
+        
+        if DoneReason.COLLIDED == info.get("DoneReason", ""):
+            end_reward = -200
+        elif DoneReason.MAX_EXP_STEP == info.get("DoneReason", ""):
+            end_reward = -200
+        elif DoneReason.TIMEOUT == info.get("DoneReason", ""):
             end_reward = -200
         elif info["reached_stoparea"]:
             end_reward = 200
-        elif info["timeout"]:
-            end_reward = -200
         else:
-            end_reward = 0.0
+            end_reward = 0
+        
+        # add penalty when reaching close to other cars
+            
         return distance_reward + end_reward + step_reward
 
     def assemble_surr_obs(self, observation, env):

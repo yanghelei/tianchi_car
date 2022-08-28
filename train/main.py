@@ -18,7 +18,8 @@ from train.config import PolicyParam
 from train.policy import PPOPolicy
 from train.workers import MemorySampler
 from geek.env.logger import Logger
-
+from ai_hub.notice import notice
+from ai_hub import Logger as Writer
 logger = Logger.get_logger(__name__)
 
 class MulProPPO:
@@ -34,7 +35,7 @@ class MulProPPO:
             torch.cuda.manual_seed(self.args.seed)
 
         self.sampler = MemorySampler(self.args, self.logger)
-        self.model = PPOPolicy(2)
+        self.model = PPOPolicy(2).to(self.args.device)
         self.optimizer = opt.Adam(self.model.parameters(), lr=self.args.lr)
 
         self.clip_now = self.args.clip
@@ -79,7 +80,8 @@ class MulProPPO:
             os.makedirs(self.model_dir)
         except:
             print("file is existed")
-        self.writer = SummaryWriter(self.exp_dir)
+        
+        self.writer = Writer(self.exp_dir, openid='oWbT458Ya1xKsC1d_E_RXWf0MNos')
 
     def update(self, batch, episode):
         
@@ -233,13 +235,18 @@ class MulProPPO:
         return lr_now, iteration_reduce
 
     def train(self):
-    
+        nc = notice("oWbT458Ya1xKsC1d_E_RXWf0MNos")
+        nc.task_complete_notice(task_name="Training", task_progree="training Started.")
+
         for i_episode in range(self.args.num_episode):
 
             memory = self.sampler.sample(self.model)
             batch = memory.sample()
             batch_size = len(memory)
             self.global_sample_size += batch_size
+            # before training , rollout out some random episode to initiate
+            if i_episode < self.args.random_episode:
+                continue
             # update policy
             total_loss, loss_surr, loss_value, loss_entropy, rewards = self.update(batch, i_episode)
             # schedule lr and clip
@@ -279,13 +286,13 @@ class MulProPPO:
                 self.logger.info(
                     "lr now: " + str(lr_now) + "  lr reduce per iteration: " + str(lr_iteration_reduce)
                 )
-                self.writer.add_scalar("reward", reward, i_episode)
-                self.writer.add_scalar("total_loss", total_loss, i_episode)
-                self.writer.add_scalar("reach_goal_rate", reach_goal_rate, i_episode)
-                self.writer.add_scalar('pi_loss', loss_surr, i_episode)
-                self.writer.add_scalar('value_loss', loss_value, i_episode)
-                self.writer.add_scalar('entropy_loss', loss_entropy, i_episode)
-
+                self.writer.scalar_summary("reward", reward, i_episode)
+                self.writer.scalar_summary("total_loss", total_loss, i_episode)
+                self.writer.scalar_summary("reach_goal_rate", reach_goal_rate, i_episode)
+                self.writer.scalar_summary('pi_loss', loss_surr, i_episode)
+                self.writer.scalar_summary('value_loss', loss_value, i_episode)
+                self.writer.scalar_summary('entropy_loss', loss_entropy, i_episode)
+                self.writer.show('reach_goal_rate')
             if i_episode % self.args.save_num_episode == 0:
                 torch.save(
                     self.model.state_dict(), self.model_dir + "network.pth"

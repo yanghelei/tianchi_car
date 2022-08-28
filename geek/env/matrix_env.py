@@ -148,7 +148,7 @@ class MatrixEnv(ABC, gym.Env):
                                 Done: 以下条件会Done会为True
                                                 （1）主车后轴中心进入目标区域
                                                 （2）主车bounding box任意点出地图或与环境车辆碰撞
-                                                （3）超时，时限根据场景不同
+                                                （3）超时，时限根据场景不同 # 每个场景的step不同
 
                                 Info：{"DoneReason": 
                                      # "collided", 

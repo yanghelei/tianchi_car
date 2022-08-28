@@ -18,15 +18,23 @@ from train.policy import PPOPolicy
 from train.tools import EnvPostProcsser
 from train.workers import EnvWorker
 from pathlib import Path
+import argparse 
 model_dir = str(Path(os.path.dirname(__file__)) / 'results' / 'model')
+
+parser = argparse.ArgumentParser()
+parser.add_argument('load_model', action="store_true", default=False)
+parser.add_argument('num_workers', type=int, default=1)
+args = parser.parse_args()
+
 def run(worker_index):
     try:
         env = gym.make("MatrixEnv-v1", scenarios=Scenarios.INFERENCE)
         model = PPOPolicy(2)
-        model.load_model(model_dir+'/network.pth', 'cpu')
         env_post_processer = EnvPostProcsser()
-        env_post_processer.surr_vec_normalize.load_model(model_dir+"/sur_norm.pth", 'cpu')
-        env_post_processer.ego_vec_normalize.load_model(model_dir+"/ego_norm.pth", 'cpu')
+        if args.load_model:
+            model.load_model(model_dir+'/network.pth', 'cpu')
+            env_post_processer.surr_vec_normalize.load_model(model_dir+"/sur_norm.pth", 'cpu')
+            env_post_processer.ego_vec_normalize.load_model(model_dir+"/ego_norm.pth", 'cpu')
         obs = env.reset()
         env_post_processer.reset(obs)
         while True:
@@ -48,9 +56,8 @@ def run(worker_index):
 
 
 if __name__ == "__main__":
-    num_workers = 12
-    pool = Pool(num_workers)
+    num_workers = args.num_workers
+    pool = Pool(args.num_workers)
     pool_result = pool.map_async(run, list(range(num_workers)))
     pool_result.wait(timeout=3000)
-
     logger.info("inference done.")

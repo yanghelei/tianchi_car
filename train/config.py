@@ -13,7 +13,8 @@ import torch
 class PolicyParam:
     seed: int = 1234
 
-    num_workers: int = 15
+    num_workers: int = 12
+    random_episode: int = 100
     num_episode: int = 100000
     batch_size: int =  4196
     minibatch_size: int = 512
