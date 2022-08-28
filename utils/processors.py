@@ -155,10 +155,10 @@ class Processor:
         self.env_last_distance[env_id] = compute_distance(target_xy, curr_xy)
 
     def preprocess_fn(self, **kwargs):
-        assert len(kwargs['env_id']) == len(self.envs_id)
+        # assert len(kwargs['env_id']) == len(self.envs_id)
         if 'rew' in kwargs:
-            obs_next = [None] * self.n_env
-            rew = [0] * self.n_env
+            obs_next = [None] * len(kwargs['env_id'])
+            rew = [0] * len(kwargs['env_id'])
             for _id in kwargs['env_id']:
                 obs_next[_id] = self.get_observation(kwargs['obs_next'][_id])
                 rew[_id] = self.compute_reward(_id, kwargs['obs_next'][_id], kwargs['info'][_id])
@@ -167,7 +167,7 @@ class Processor:
             rew = np.array(rew)
             return Batch(obs_next=obs_next, rew=rew, done=kwargs['done'], info=kwargs['info'], policy=kwargs['policy'], env_id=kwargs['env_id'])
         else:
-            obs = [None] * self.n_env
+            obs = [None] * len(kwargs['env_id'])
             for _id in kwargs['env_id']:
                 obs[_id] = self.get_observation(kwargs['obs'][_id])
                 self.env_last_obs[_id] = kwargs['obs'][_id]
