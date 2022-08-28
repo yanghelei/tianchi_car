@@ -338,25 +338,25 @@ class EnvPostProcsser:
         self.prev_distance = distance_with_target
         step_reward = -0.5
 
-        # if info["collided"]:
-        #     end_reward = -200
-        # elif info["reached_stoparea"]:
-        #     end_reward = 200
-        # elif info["timeout"]:
-        #     end_reward = -200
-        # else:
-        #     end_reward = 0.0
-        
-        if DoneReason.COLLIDED == info.get("DoneReason", ""):
-            end_reward = -200
-        elif DoneReason.MAX_EXP_STEP == info.get("DoneReason", ""):
-            end_reward = -200
-        elif DoneReason.TIMEOUT == info.get("DoneReason", ""):
+        if info["collided"]:
             end_reward = -200
         elif info["reached_stoparea"]:
             end_reward = 200
+        elif info["timeout"]:
+            end_reward = -200
         else:
-            end_reward = 0
+            end_reward = 0.0
+        
+        # if DoneReason.COLLIDED == info.get("DoneReason", ""):
+        #     end_reward = -200
+        # elif DoneReason.MAX_EXP_STEP == info.get("DoneReason", ""):
+        #     end_reward = -200
+        # elif DoneReason.TIMEOUT == info.get("DoneReason", ""):
+        #     end_reward = -200
+        # elif info["reached_stoparea"]:
+        #     end_reward = 200
+        # else:
+        #     end_reward = 0
         
         # add penalty when reaching close to other cars
             

@@ -18,8 +18,8 @@ from train.config import PolicyParam
 from train.policy import PPOPolicy
 from train.workers import MemorySampler
 from geek.env.logger import Logger
-from ai_hub.notice import notice
-from ai_hub import Logger as Writer
+# from ai_hub.notice import notice
+# from ai_hub import Logger as Writer
 logger = Logger.get_logger(__name__)
 
 class MulProPPO:
@@ -81,7 +81,7 @@ class MulProPPO:
         except:
             print("file is existed")
         
-        self.writer = Writer(self.exp_dir, openid='oWbT458Ya1xKsC1d_E_RXWf0MNos')
+        # self.writer = Writer(self.exp_dir, openid='oWbT458Ya1xKsC1d_E_RXWf0MNos')
 
     def update(self, batch, episode):
         
@@ -235,8 +235,8 @@ class MulProPPO:
         return lr_now, iteration_reduce
 
     def train(self):
-        nc = notice("oWbT458Ya1xKsC1d_E_RXWf0MNos")
-        nc.task_complete_notice(task_name="Training", task_progree="training Started.")
+        # nc = notice("oWbT458Ya1xKsC1d_E_RXWf0MNos")
+        # nc.task_complete_notice(task_name="Training", task_progree="training Started.")
 
         for i_episode in range(self.args.num_episode):
 
@@ -286,13 +286,13 @@ class MulProPPO:
                 self.logger.info(
                     "lr now: " + str(lr_now) + "  lr reduce per iteration: " + str(lr_iteration_reduce)
                 )
-                self.writer.scalar_summary("reward", reward, i_episode)
-                self.writer.scalar_summary("total_loss", total_loss, i_episode)
-                self.writer.scalar_summary("reach_goal_rate", reach_goal_rate, i_episode)
-                self.writer.scalar_summary('pi_loss', loss_surr, i_episode)
-                self.writer.scalar_summary('value_loss', loss_value, i_episode)
-                self.writer.scalar_summary('entropy_loss', loss_entropy, i_episode)
-                self.writer.show('reach_goal_rate')
+                # self.writer.scalar_summary("reward", reward, i_episode)
+                # self.writer.scalar_summary("total_loss", total_loss, i_episode)
+                # self.writer.scalar_summary("reach_goal_rate", reach_goal_rate, i_episode)
+                # self.writer.scalar_summary('pi_loss', loss_surr, i_episode)
+                # self.writer.scalar_summary('value_loss', loss_value, i_episode)
+                # self.writer.scalar_summary('entropy_loss', loss_entropy, i_episode)
+                # self.writer.show('reach_goal_rate')
             if i_episode % self.args.save_num_episode == 0:
                 torch.save(
                     self.model.state_dict(), self.model_dir + "network.pth"
@@ -313,7 +313,7 @@ class MulProPPO:
         self.sampler.close()
 
 if __name__ == "__main__":
-    os.environ["OMP_NUM_THREADS"] = "1"  # Necessary for multithreading.
+    # os.environ["OMP_NUM_THREADS"] = "1"  # Necessary for multithreading.
     torch.set_num_threads(1)
     
     mpp = MulProPPO(logger=logger)

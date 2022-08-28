@@ -104,12 +104,12 @@ class EnvWorker(mp.Process):
                             steer = self.lmap(action[0],[-1.0, 1.0],[-0.3925, 0.3925],)
                             acc = self.lmap(action[1], [-1.0, 1.0], [-6.0, 2.0])
                             obs, reward, done, info = self.env.step(np.array([steer, acc]))
-                            done_reason = info.get("DoneReason", "")
-                            if not done:
-                                if done_reason == DoneReason.INFERENCE_DONE:
-                                    break
-                                elif done_reason == DoneReason.Runtime_ERROR:
-                                    break
+                            # done_reason = info.get("DoneReason", "")
+                            # if not done:
+                            #     if done_reason == DoneReason.INFERENCE_DONE:
+                            #         break
+                            #     elif done_reason == DoneReason.Runtime_ERROR:
+                            #         break
                             new_env_state = self.env_post_processer.assemble_surr_obs(obs, self.env)
                             new_vec_state = self.env_post_processer.assemble_ego_vec_obs(obs)
                             reward = self.env_post_processer.assemble_reward(obs, info)

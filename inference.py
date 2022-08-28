@@ -19,23 +19,26 @@ from train.tools import EnvPostProcsser
 from train.workers import EnvWorker
 from pathlib import Path
 import argparse 
+import torch
+# os.environ["OMP_NUM_THREADS"] = "1"  # Necessary for multithreading.
+torch.set_num_threads(1)
 model_dir = str(Path(os.path.dirname(__file__)) / 'results' / 'model')
 
 parser = argparse.ArgumentParser()
-parser.add_argument('load_model', action="store_true", default=False)
-parser.add_argument('num_workers', type=int, default=1)
+parser.add_argument('--load_model', action="store_true", default=False)
+parser.add_argument('--num_workers', type=int, default=1)
 args = parser.parse_args()
 
 def run(worker_index):
     try:
         env = gym.make("MatrixEnv-v1", scenarios=Scenarios.INFERENCE)
+        obs = env.reset()
         model = PPOPolicy(2)
         env_post_processer = EnvPostProcsser()
         if args.load_model:
             model.load_model(model_dir+'/network.pth', 'cpu')
             env_post_processer.surr_vec_normalize.load_model(model_dir+"/sur_norm.pth", 'cpu')
             env_post_processer.ego_vec_normalize.load_model(model_dir+"/ego_norm.pth", 'cpu')
-        obs = env.reset()
         env_post_processer.reset(obs)
         while True:
             env_state = env_post_processer.assemble_surr_obs(obs, env)
@@ -47,8 +50,9 @@ def run(worker_index):
             obs, _, done, info = env.step(numpy.array([steer, acc]))
             infer_done = DoneReason.INFERENCE_DONE == info.get("DoneReason", "")
             if done and not infer_done:
+                obs = env.reset()
+                env_post_processer.reset(obs)
                 logger.info(f"env rest")
-                print(info)
             elif infer_done:
                 break
     except Exception as e:
