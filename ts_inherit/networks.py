@@ -26,8 +26,8 @@ class MyActor(nn.Module):
         self.softmax = softmax
         self.num_atoms = num_atoms
 
-        self.sur_norm = Normalization(input_shape=cfgs.sur_dim)
-        self.ego_norm = Normalization(input_shape=cfgs.ego_dim)
+        self.sur_norm = Normalization(input_shape=cfgs.sur_dim, device=self.device)
+        self.ego_norm = Normalization(input_shape=cfgs.ego_dim, device=self.device)
 
         self.sur_project = MLPLayer(input_dim=cfgs.sur_dim,
                                     hidden_size=cfgs.sur_hidden,
