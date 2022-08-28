@@ -5,12 +5,10 @@
 
 import logging
 import os
+import time
 import sys
 
 sys.path.append(os.path.split(os.path.dirname(os.path.abspath(__file__)))[0] + '/')
-
-import time
-
 import numpy as np
 import torch
 import torch.nn as nn
@@ -87,7 +85,9 @@ class MulProPPO:
 
     def train(self):
         for i_episode in range(self.args.num_episode):
-            self.logger.info("----------------------" + str(i_episode) + "-------------------------")
+            self.logger.info(
+                "----------------------" + str(i_episode) + "-------------------------"
+            )
             memory = self.sampler.sample(self.model)
             batch = memory.sample()
             batch_size = len(memory)
@@ -111,7 +111,9 @@ class MulProPPO:
             for i in reversed(range(batch_size)):
                 returns[i] = rewards[i] + self.args.gamma * prev_return * masks[i]
                 deltas[i] = rewards[i] + self.args.gamma * prev_value * masks[i] - values[i]
-                advantages[i] = (deltas[i] + self.args.gamma * self.args.lamda * prev_advantage * masks[i])
+                advantages[i] = (
+                        deltas[i] + self.args.gamma * self.args.lamda * prev_advantage * masks[i]
+                )
 
                 prev_return = returns[i]
                 prev_value = values[i]

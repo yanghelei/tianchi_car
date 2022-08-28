@@ -59,7 +59,7 @@ class PPOPolicy(nn.Module):
         nn.Module.__init__(self)
         self.policy_param = PolicyParam
         self.feature_net = (
-            VecFeatureNet() if self.policy_param.obs_type is "vec" else CnnFeatureNet()
+            VecFeatureNet() if self.policy_param.obs_type == "vec" else CnnFeatureNet()
         )
         self.actor_logit = nn.Sequential(
             OrderedDict(

@@ -6,6 +6,7 @@
 import multiprocessing as mp
 import os
 import time
+import traceback
 from collections import namedtuple
 from typing import List
 
@@ -98,7 +99,11 @@ class EnvWorker(mp.Process):
                                 value = value.data.cpu().numpy()[0][0]
                                 env_state = env_state.data.cpu().numpy()[0]
                                 vec_state = vec_state.data.cpu().numpy()[0]
-                            steer = self.lmap(np.clip(action[0], -1.0, 1.0), [-1.0, 1.0], [-0.39269908, 0.39269908])
+                            steer = self.lmap(
+                                np.clip(action[0], -1.0, 1.0),
+                                [-1.0, 1.0],
+                                [-0.39269908, 0.39269908],
+                            )
                             acc = self.lmap(np.clip(action[1], -1.0, 1.0), [-1.0, 1.0], [-2.0, 2.0])
                             obs, reward, done, info = self.env.step(np.array([steer, acc]))
                             new_env_state = self.env_post_processer.assemble_surr_obs(obs, self.env)
@@ -115,7 +120,7 @@ class EnvWorker(mp.Process):
                             env_state = new_env_state
                             vec_state = new_vec_state
                     except Exception as e:
-                        logger.error(f"exception:{e}")
+                        logger.error(f"exception: {traceback.print_exc()}")
 
             elif command == "close":
                 self.remote.close()
@@ -139,7 +144,10 @@ class MemorySampler(object):
         self.lock = mp.Lock()
 
         self.remotes, self.work_remotes = zip(*[mp.Pipe() for _ in range(self.num_workers)])
-        self.workers = [EnvWorker(remote, self.queue, self.lock, args.seed + index, index) for index, remote in enumerate(self.work_remotes)]
+        self.workers = [
+            EnvWorker(remote, self.queue, self.lock, args.seed + index, index)
+            for index, remote in enumerate(self.work_remotes)
+        ]
 
         for worker in self.workers:
             worker.daemon = True

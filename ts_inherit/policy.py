@@ -1,8 +1,6 @@
-import gym
-import numpy as np
-from tianshou.data import Batch
-from tianshou.policy import RainbowPolicy
 import itertools
+import numpy as np
+from tianshou.policy import RainbowPolicy
 
 
 class MyRainbow(RainbowPolicy):
@@ -32,6 +30,6 @@ class MyRainbow(RainbowPolicy):
         assert hasattr(self, 'action_library')
         assert len(act.shape) <= 2, f"Unknown action format with shape {act.shape}."
         if len(act.shape) == 1:
-            return np.array([self.action_library[a] for a in act])
-        return np.array([[self.action_library[a] for a in a_] for a_ in act])
+            return np.array([self.action_library[int(a)] for a in act])
+        return np.array([[self.action_library[int(a)] for a in a_] for a_ in act])
 

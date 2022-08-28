@@ -1,25 +1,23 @@
 import os
 import sys
-
 sys.path.append(os.path.split(os.path.dirname(os.path.abspath(__file__)))[0] + '/')
 import gym
 import torch
 import pprint
 import pickle
+from geek.env.matrix_env import Scenarios
+from utils.processors import set_seed, Processor
 from torch.utils.tensorboard import SummaryWriter
 
-from tianshou.data import PrioritizedVectorReplayBuffer, VectorReplayBuffer, Collector
-from tianshou.env import DummyVectorEnv, SubprocVectorEnv
-from tianshou.trainer import offpolicy_trainer
-from tianshou.utils import TensorboardLogger
+from ts_inherit.logger import MyLogger
+from ts_inherit.networks import MyActor
+from ts_inherit.policy import MyRainbow
+from ts_inherit.collector import MyCollector
+from ts_inherit.trainer import my_policy_trainer
 
-from tianshou.utils.net.discrete import NoisyLinear, Actor
-
-from geek.env.matrix_env import Scenarios
-from rainbow.utils import set_seed, preprocess_fn
-# from rainbow.collector import MyCollector
-from rainbow.policy import MyRainbow
-from rainbow.networks import MyActor
+from tianshou.env import SubprocVectorEnv
+from tianshou.utils.net.discrete import NoisyLinear
+from tianshou.data import PrioritizedVectorReplayBuffer, VectorReplayBuffer
 
 
 def make_train_env(cfgs):
@@ -38,6 +36,7 @@ def make_test_env(cfgs):
 
 def train(cfgs):
     train_envs = SubprocVectorEnv([lambda: make_train_env(cfgs) for _ in range(cfgs.training_num)])
+    test_envs = SubprocVectorEnv([lambda: make_train_env(cfgs) for _ in range(15-cfgs.training_num)])
 
     set_seed(seed=cfgs.seed)
 
@@ -45,9 +44,8 @@ def train(cfgs):
         return NoisyLinear(x, y, cfgs.noisy_std)
 
     net = MyActor(
-        cfgs.state_shape,
+        cfgs.network,
         cfgs.action_shape,
-        hidden_sizes=cfgs.hidden_sizes,
         device=cfgs.device,
         softmax=True,
         num_atoms=cfgs.num_atoms,
@@ -75,19 +73,26 @@ def train(cfgs):
     else:
         buf = VectorReplayBuffer(cfgs.buffer_size, buffer_num=len(train_envs))
 
+    train_processor = Processor(cfgs, net)
+    test_processor = Processor(cfgs, net, mode='test')
+
     # collector
-    train_collector = Collector(policy, train_envs, buf, preprocess_fn=preprocess_fn, exploration_noise=True)
+    train_collector = MyCollector(policy, train_envs, buf, preprocess_fn=train_processor.preprocess_fn, exploration_noise=True)
+    test_collector = MyCollector(policy, test_envs, preprocess_fn=test_processor.preprocess_fn, exploration_noise=True)
 
     train_collector.collect(n_step=cfgs.batch_size * cfgs.training_num)
 
     # log
     log_path = os.path.join(cfgs.logdir, cfgs.task, "rainbow")
     writer = SummaryWriter(log_path)
-    logger = TensorboardLogger(writer, save_interval=cfgs.save_interval)
+    logger = MyLogger(writer, save_interval=cfgs.save_interval)
+
+    logger.logger.info('device: ' + str(cfgs.device))
 
     def save_best_fn(policy):
         # 保存最优模型
         torch.save(policy.state_dict(), os.path.join(log_path, "policy.pth"))
+        logger.logger.info('save best model into ' + str(os.path.join(log_path, "policy.pth")) + ' successfully!')
 
     # def stop_fn(mean_rewards):
     #     # 终止条件
@@ -125,31 +130,36 @@ def train(cfgs):
 
     if cfgs.resume:
         # load from existing checkpoint
+        logger.logger.info(f"Loading agent under {log_path}")
         print(f"Loading agent under {log_path}")
         ckpt_path = os.path.join(log_path, "checkpoint.pth")
         if os.path.exists(ckpt_path):
             checkpoint = torch.load(ckpt_path, map_location=cfgs.device)
             policy.load_state_dict(checkpoint['model'])
             policy.optim.load_state_dict(checkpoint['optim'])
+            logger.logger.info("Successfully restore policy and optim.")
             print("Successfully restore policy and optim.")
         else:
+            logger.logger.info("Fail to restore policy and optim.")
             print("Fail to restore policy and optim.")
         buffer_path = os.path.join(log_path, "train_buffer.pkl")
         if os.path.exists(buffer_path):
             train_collector.buffer = pickle.load(open(buffer_path, "rb"))
+            logger.logger.info("Successfully restore buffer.")
             print("Successfully restore buffer.")
         else:
+            logger.logger.info("Fail to restore buffer.")
             print("Fail to restore buffer.")
 
     # trainer
-    result = offpolicy_trainer(
+    result = my_policy_trainer(
         policy=policy,
         train_collector=train_collector,
-        test_collector=None,
+        test_collector=test_collector,
         max_epoch=cfg.epoch,
         step_per_epoch=cfg.step_per_epoch,
         step_per_collect=cfg.step_per_collect,
-        episode_per_test=0,
+        episode_per_test=cfg.test_num,
         batch_size=cfg.batch_size,
         update_per_step=cfg.update_per_step,
         train_fn=train_fn,
@@ -157,6 +167,7 @@ def train(cfgs):
         stop_fn=None,
         save_best_fn=save_best_fn,
         logger=logger,
+        show_progress=False,
         resume_from_log=cfg.resume,
         save_checkpoint_fn=save_checkpoint_fn,
     )
@@ -173,19 +184,21 @@ def evaluate(cfgs, policy):
     env = gym.make(cfgs.task)
     policy.eval()
     policy.set_eps(cfgs.eps_test)
-    collector = Collector(policy, env)
+    collector = MyCollector(policy, env)
     result = collector.collect(n_episode=10, render=cfgs.render)
     rews, lens = result["rews"], result["lens"]
     print(f"The trained model reward: {rews.mean()}, length: {lens.mean()}")
 
 
 if __name__ == '__main__':
+    torch.set_num_threads(1)
+
     from rainbow.config import cfg
 
     cfg.action_space = gym.spaces.Discrete(cfg.action_per_dim[0] * cfg.action_per_dim[1])
-    cfg.observation_space = gym.spaces.Box(-1e4, 1e4, shape=(70,))
+    # cfg.observation_space = gym.spaces.Box(-1e4, 1e4, shape=(70,))
 
-    cfg.state_shape = cfg.observation_space.shape
+    # cfg.state_shape = cfg.observation_space.shape
     cfg.action_shape = cfg.action_space.n
 
     policy = train(cfgs=cfg)

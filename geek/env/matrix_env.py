@@ -20,8 +20,7 @@ class Scenarios(Enum):
 
 
 class DoneReason:
-    COLLISION_ON_ROAD = "CollidedOnRoad"
-    COLLISION_ON_OBJECT = "CollidedOnObject"
+    COLLIDED = "collided"
     TIMEOUT = "Timeout"
     MAX_EXP_STEP = "MaxExpStep"
     INFERENCE_DONE = "InferenceDone"
@@ -141,7 +140,7 @@ class MatrixEnv(ABC, gym.Env):
                                                                 中心点加速度y
                                                                 宽度
                                                                 长度
-                                        "maps": LaneInfo() 地图定义见LaneInfo
+                                        "map": LaneInfo() 地图定义见LaneInfo
                                         }
 
                                 Reward: 默认输出0，由选手自行设计
@@ -152,8 +151,7 @@ class MatrixEnv(ABC, gym.Env):
                                                 （3）超时，时限根据场景不同
 
                                 Info：{"DoneReason": 
-                                     # "CollidedOnRoad", 
-                                     # "CollidedOnObject",
+                                     # "collided", 
                                      # "Timeout", 
                                      # "MaxExpStep"
                                      # "RuntimeError", 运行时异常, 此时可忽略当前帧

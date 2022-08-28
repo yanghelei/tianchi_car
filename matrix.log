@@ -1,0 +1,5 @@
+2022-08-28 23:10:00,095 device: cpu
+2022-08-28 23:10:00,095 Loading agent under /myspace/rainbow\MatrixEnv-v1\rainbow
+2022-08-28 23:10:00,095 Fail to restore policy and optim.
+2022-08-28 23:10:00,095 Fail to restore buffer.
+2022-08-28 23:10:25,120 save best model into /myspace/rainbow\MatrixEnv-v1\rainbow\policy.pth successfully!
