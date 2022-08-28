@@ -6,6 +6,7 @@
 import multiprocessing as mp
 import os
 import time
+import traceback
 from collections import namedtuple
 from typing import List
 
@@ -119,7 +120,7 @@ class EnvWorker(mp.Process):
                             env_state = new_env_state
                             vec_state = new_vec_state
                     except Exception as e:
-                        logger.error(f"exception:{e}")
+                        logger.error(f"exception: {traceback.print_exc()}")
 
             elif command == "close":
                 self.remote.close()
