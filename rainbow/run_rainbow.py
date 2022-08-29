@@ -89,6 +89,9 @@ def train(cfgs):
 
     logger.logger.info('device: ' + str(cfgs.device))
 
+    train_processor.logger = logger.logger
+    test_processor.logger = logger.logger
+
     def save_best_fn(policy):
         # 保存最优模型
         torch.save(policy.state_dict(), os.path.join(log_path, "policy.pth"))

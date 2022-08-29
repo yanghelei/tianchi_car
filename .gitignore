@@ -7,3 +7,4 @@ train
 results
 *.pyc
 test.py
+matrix.log

@@ -3,7 +3,7 @@ import torch
 import itertools
 import numpy as np
 import collections
-from math import pi
+from math import pi, inf
 from tianshou.data import Batch
 from utils.math import compute_distance
 
@@ -23,6 +23,9 @@ class Processor:
         self.max_consider_nps = cfgs.max_consider_nps
         self.sur_dim = cfgs.network.sur_dim
         self.ego_dim = cfgs.network.ego_dim
+
+        self.logger = None
+
         # self.surr_vec_deque = collections.deque(maxlen=cfgs.history_length)
 
     # def assemble_surr_vec_obs(self, obs, sur_norm_layer, ego_norm_layer):
@@ -36,7 +39,7 @@ class Processor:
 
     # return sur_state
 
-    def get_observation(self, observation):
+    def get_observation(self, observation, env_id=None):
         curr_xy = (observation["player"]["status"][0], observation["player"]["status"][1])  # 车辆后轴中心位置
         npc_info_dict = {}
 
@@ -83,12 +86,15 @@ class Processor:
         prev_acc = observation["player"]["status"][8]  # 上一个加速度命令
         lane_list = []
 
-        for lane_info in observation["map"].lanes:
-            lane_list.append(lane_info.lane_id)
-
-        current_lane_index = lane_list.index(observation["map"].lane_id)
-
-        current_offset = observation["map"].lane_offset
+        if observation["map"] is not None:
+            for lane_info in observation["map"].lanes:
+                lane_list.append(lane_info.lane_id)
+            current_lane_index = lane_list.index(observation["map"].lane_id)
+            current_offset = observation["map"].lane_offset
+        else:  # 按照主办方的说法，车开到道路外有可能出现 none 的情况
+            current_lane_index = -1.0
+            current_offset = 0.0
+            self.logger.info('Env:'+str(env_id) + '\tobs[\'map\'] is None in get_observation(obs)!!!\tUse -1 as lane_index and 0.0 offset as to keep running!')
 
         ego_obs = np.array(
             [[
@@ -128,21 +134,78 @@ class Processor:
         assert self.env_last_distance[env_id] is not None
 
         # distance_reward = (self.env_last_distance[env_id] - distance_with_target) / (self.target_speed * self.dt)
-        distance_reward = (self.env_last_distance[env_id] - distance_with_target) / (1 * 1)
+        distance_reward = (self.env_last_distance[env_id] - distance_with_target)
 
         self.env_last_distance[env_id] = distance_with_target
 
         step_reward = -1
 
-        if info["collided"]:
-            end_reward = -2000
-        elif info["reached_stoparea"]:
-            end_reward = 2000
-        elif info["timeout"]:
-            end_reward = -2000
+        car_status = next_obs['player']['status']
+        """
+            急刹
+            判据: 1.纵向加速度绝对值大于2；
+                 2.纵向jerk绝对值大于0.9；
+            扣分: 10分每次，最高30；
+        """
+        car_forward_acc = car_status[4]
+        car_forward_jerk = None
+        if car_forward_acc > 2:
+            brake_reward = -100
         else:
-            end_reward = 0.0
-        return distance_reward + end_reward + step_reward
+            brake_reward = 0
+        """
+            大转向
+            判据: 1.横向加速度绝对值大于4；
+                 2.横向jerk绝对值大于0.9；
+            扣分: 10分每次，最高30；
+        """
+        car_lateral_acc = car_status[5]
+        car_lateral_jerk = None
+        if car_lateral_acc > 4:
+            turn_reward = -100
+        else:
+            turn_reward = 0
+
+        # 压线 TODO: 压线的判据
+
+        """
+            超速
+            判据: 1.车速超过当前车道上限的20%；
+                 2.或全程平均车速超过120km/h；
+            扣分: 15分每次，最高30
+            TODO: 全程平均车速尚未考虑
+        """
+
+        if next_obs["map"] is not None:
+            speed_limit = None
+            for lane_info in next_obs["map"].lanes:
+                if next_obs["map"].lane_id == lane_info.lane_id:
+                    speed_limit = lane_info.speed_limit
+                    break
+            if speed_limit is None:
+                speed_limit = inf
+                self.logger.info('Env:'+ str(env_id) + 'Not find current lane\'s speed limit!!!\tUse inf to keep running!')
+        else:  # 按照主办方的说法，车开到道路外有可能出现 none 的情况
+            speed_limit = inf
+            self.logger.info('Env:' + str(env_id) + 'next_obs[\'map\'] is None!!!\tUse inf as speed limit to keep running!')
+        car_speed = car_status[3]  # 当前车速
+        if car_speed > speed_limit:
+            high_speed_reward = -150
+        else:
+            high_speed_reward = 0
+
+        rule_reward = brake_reward + turn_reward + high_speed_reward
+
+        if info["collided"]:  # 碰撞
+            end_reward = -1000
+        elif info["reached_stoparea"]:  #
+            end_reward = 1000
+        elif info["timeout"]:  # 超时未完成
+            end_reward = -1000
+        else:
+            end_reward = 0.0  # 尚未 terminate
+
+        return distance_reward + end_reward + step_reward + rule_reward
 
     def update_distance_to_target(self, env_id):
         obs = self.env_last_obs[env_id]
@@ -160,7 +223,7 @@ class Processor:
             obs_next = [None] * len(kwargs['env_id'])
             rew = [0] * len(kwargs['env_id'])
             for _idx, _id in enumerate(kwargs['env_id']):
-                obs_next[_idx] = self.get_observation(kwargs['obs_next'][_idx])
+                obs_next[_idx] = self.get_observation(kwargs['obs_next'][_idx], env_id=_id)
                 rew[_idx] = self.compute_reward(_id, kwargs['obs_next'][_idx], kwargs['info'][_idx])
                 self.env_last_obs[_id] = kwargs['obs_next'][_idx]
             obs_next = np.array(obs_next)
@@ -169,7 +232,7 @@ class Processor:
         else:
             obs = [None] * len(kwargs['env_id'])
             for _idx, _id in enumerate(kwargs['env_id']):
-                obs[_idx] = self.get_observation(kwargs['obs'][_idx])
+                obs[_idx] = self.get_observation(kwargs['obs'][_idx], env_id=_id)
                 self.env_last_obs[_id] = kwargs['obs'][_idx]
                 self.update_distance_to_target(_id)
             obs = np.array(obs)
