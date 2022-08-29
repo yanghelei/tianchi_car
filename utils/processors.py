@@ -149,7 +149,7 @@ class Processor:
         """
         car_forward_acc = car_status[4]
         car_forward_jerk = None
-        if car_forward_acc > 2:
+        if abs(car_forward_acc) > 2:
             brake_reward = -100
         else:
             brake_reward = 0
@@ -161,7 +161,7 @@ class Processor:
         """
         car_lateral_acc = car_status[5]
         car_lateral_jerk = None
-        if car_lateral_acc > 4:
+        if abs(car_lateral_acc) > 4:
             turn_reward = -100
         else:
             turn_reward = 0

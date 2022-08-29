@@ -38,7 +38,7 @@ config = dict(
     training_num=14,  # 用于训练的环境数目
     test_num=10,  # the number of episodes for one policy evaluation
 
-    logdir='/myspace/rainbow',
+    logdir='/myspace/rainbow_v1',
     render=0.0,
 
     prioritized_replay=True,
