@@ -132,14 +132,14 @@ class Processor:
 
         self.env_last_distance[env_id] = distance_with_target
 
-        step_reward = -0.5
+        step_reward = -1
 
         if info["collided"]:
-            end_reward = -200
+            end_reward = -2000
         elif info["reached_stoparea"]:
-            end_reward = 200
+            end_reward = 2000
         elif info["timeout"]:
-            end_reward = -200
+            end_reward = -2000
         else:
             end_reward = 0.0
         return distance_reward + end_reward + step_reward
