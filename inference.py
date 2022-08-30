@@ -53,7 +53,7 @@ def run(worker_index):
                 obs = env.reset()
                 env_post_processer.reset(obs)
                 logger.info(f"env rest")
-            elif infer_done:
+            elif infer_done :
                 break
     except Exception as e:
         logger.info(f"{worker_index}, error: {str(e)}")

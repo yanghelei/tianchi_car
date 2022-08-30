@@ -3,10 +3,10 @@
 # * Unauthorized copying of this file, via any medium is strictly prohibited
 # *****************************************************************************
 
-import logging
 import os
 import time
-
+import shutil
+from pathlib import Path
 import numpy as np
 import torch
 import torch.nn as nn
@@ -294,19 +294,21 @@ class MulProPPO:
                 # self.writer.scalar_summary('value_loss', loss_value, i_episode)
                 # self.writer.scalar_summary('entropy_loss', loss_entropy, i_episode)
                 # self.writer.show('reach_goal_rate')
-            if i_episode % self.args.save_num_episode == 0:
+            if i_episode % self.args.save_num_episode == 0 and i_episode > self.args.random_episode:
                 torch.save(
                     self.model.state_dict(), self.model_dir + "network.pth"
                 )
                 self.sampler.save(self.model_dir)
+                # 存储到云端
+                save_path = str(Path(os.path.dirname(__file__)).parent.parent.resolve() / 'myspace')
+                shutil.copy(self.model_dir + "network_{}.pth".format(i_episode), save_path)
+                self.sampler.save(save_path)
             if (time.time() - self.start_time) > 9*3600:
                 break
         torch.save(
             self.model.state_dict(), self.model_dir + "network.pth"
         )
         self.sampler.save(self.model_dir)
-        import shutil
-        from pathlib import Path
         # 存储到云端
         save_path = str(Path(os.path.dirname(__file__)).parent.parent.resolve() / 'myspace')
         shutil.copy(self.model_dir + "network_{}.pth".format(i_episode), save_path)
@@ -317,6 +319,5 @@ class MulProPPO:
 if __name__ == "__main__":
     # os.environ["OMP_NUM_THREADS"] = "1"  # Necessary for multithreading.
     torch.set_num_threads(1)
-    
     mpp = MulProPPO(logger=logger)
     mpp.train()

@@ -14,11 +14,11 @@ class PolicyParam:
     seed: int = 1234
 
     num_workers: int = 12
-    random_episode: int = 10
+    random_episode: int = 100
     num_episode: int = 1000
     batch_size: int =  4196
-    minibatch_size: int = 512
-    num_epoch: int = 10
+    minibatch_size: int = 1024
+    num_epoch: int = 3
     save_num_episode: int = 1
     log_num_episode: int = 10
 
@@ -38,7 +38,7 @@ class PolicyParam:
 
     schedule_adam: str = "fix"
     schedule_clip: str = "fix"
-    use_target_kl: bool = True
+    use_target_kl: bool = False
     advantage_norm: bool = True
     use_clipped_value_loss: bool = True
     lossvalue_norm: bool = False
