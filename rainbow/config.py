@@ -17,7 +17,7 @@ config = dict(
     buffer_size=2e5,
 
     lr=1e-4,
-    gamma=0.95,
+    gamma=0.99,
     num_atoms=51,
 
     v_min=-10.0,
@@ -25,14 +25,14 @@ config = dict(
 
     noisy_std=0.1,
     n_step=11,  # the number of steps to look ahead. Default to 1.
-    target_update_freq=100,
+    target_update_freq=200,
 
     epoch=1e7,
     step_per_epoch=1e4,  # the number of transitions collected per epoch
-    step_per_collect=28,  # trainer will collect "step_per_collect" transitions and do some policy network update repeatedly in each epoch.
+    step_per_collect=14,  # trainer will collect "step_per_collect" transitions and do some policy network update repeatedly in each epoch.
     update_per_step=0.125,
 
-    batch_size=256,  # the batch size of sample data, which is going to feed in the policy network
+    batch_size=512,  # the batch size of sample data, which is going to feed in the policy network
     # hidden_sizes=[128, 128],
 
     training_num=14,  # 用于训练的环境数目

@@ -94,7 +94,7 @@ class Processor:
         else:  # 按照主办方的说法，车开到道路外有可能出现 none 的情况
             current_lane_index = -1.0
             current_offset = 0.0
-            self.logger.info('Env:'+str(env_id) + '\tobs[\'map\'] is None in get_observation(obs)!!!\tUse -1 as lane_index and 0.0 offset as to keep running!')
+            self.logger.info('Env:' + str(env_id) + '\tobs[\'map\'] is None in get_observation(obs)!!!\tUse -1 as lane_index and 0.0 offset as to keep running!')
 
         ego_obs = np.array(
             [[
@@ -134,7 +134,7 @@ class Processor:
         assert self.env_last_distance[env_id] is not None
 
         # distance_reward = (self.env_last_distance[env_id] - distance_with_target) / (self.target_speed * self.dt)
-        distance_reward = (self.env_last_distance[env_id] - distance_with_target)
+        distance_reward = (self.env_last_distance[env_id] - distance_with_target) * 2
 
         self.env_last_distance[env_id] = distance_with_target
 
@@ -184,7 +184,7 @@ class Processor:
                     break
             if speed_limit is None:
                 speed_limit = inf
-                self.logger.info('Env:'+ str(env_id) + 'Not find current lane\'s speed limit!!!\tUse inf to keep running!')
+                self.logger.info('Env:' + str(env_id) + 'Not find current lane\'s speed limit!!!\tUse inf to keep running!')
         else:  # 按照主办方的说法，车开到道路外有可能出现 none 的情况
             speed_limit = inf
             self.logger.info('Env:' + str(env_id) + 'next_obs[\'map\'] is None!!!\tUse inf as speed limit to keep running!')
