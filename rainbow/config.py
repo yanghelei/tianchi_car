@@ -11,7 +11,13 @@ config = dict(
     task='MatrixEnv-v1',
     reward_threshold=None,
 
-    eps_train=0.1,
+    exploration=dict(
+        type='exp',
+        start=0.95,
+        end=0.05,
+        decay=1e5
+    ),
+    # eps_train=0.1,
     eps_test=0.01,
 
     buffer_size=2e5,
@@ -24,7 +30,7 @@ config = dict(
     v_max=10.0,
 
     noisy_std=0.1,
-    n_step=11,  # the number of steps to look ahead. Default to 1.
+    n_step=5,  # the number of steps to look ahead. Default to 1.
     target_update_freq=200,
 
     epoch=1e7,
@@ -32,13 +38,13 @@ config = dict(
     step_per_collect=14,  # trainer will collect "step_per_collect" transitions and do some policy network update repeatedly in each epoch.
     update_per_step=0.125,
 
-    batch_size=512,  # the batch size of sample data, which is going to feed in the policy network
+    batch_size=256,  # the batch size of sample data, which is going to feed in the policy network
     # hidden_sizes=[128, 128],
 
     training_num=14,  # 用于训练的环境数目
     test_num=10,  # the number of episodes for one policy evaluation
 
-    logdir='/myspace/rainbow_v1',
+    logdir='/myspace/rainbow_v1.1',
     render=0.0,
 
     prioritized_replay=True,
@@ -65,7 +71,7 @@ config = dict(
     ),
 
     max_consider_nps=10,
-    history_length=5,
+    # history_length=5,
 
 )
 

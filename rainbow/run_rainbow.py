@@ -6,7 +6,6 @@ import torch
 import pprint
 import pickle
 from geek.env.matrix_env import Scenarios
-from utils.processors import set_seed, Processor
 from torch.utils.tensorboard import SummaryWriter
 
 from ts_inherit.logger import MyLogger
@@ -18,6 +17,9 @@ from ts_inherit.trainer import my_policy_trainer
 from tianshou.env import SubprocVectorEnv
 from tianshou.utils.net.discrete import NoisyLinear
 from tianshou.data import PrioritizedVectorReplayBuffer, VectorReplayBuffer
+
+from utils.processors import set_seed, Processor
+from utils.exploration import get_epsilon_greedy_fn
 
 
 def make_train_env(cfgs):
@@ -80,7 +82,7 @@ def train(cfgs):
     train_collector = MyCollector(policy, train_envs, buf, preprocess_fn=train_processor.preprocess_fn, exploration_noise=True)
     test_collector = MyCollector(policy, test_envs, preprocess_fn=test_processor.preprocess_fn, exploration_noise=False)
 
-    train_collector.collect(n_step=cfgs.batch_size * cfgs.training_num)
+    train_collector.collect(n_step=cfgs.batch_size * cfgs.training_num, random=True)
 
     # log
     log_path = os.path.join(cfgs.logdir, cfgs.task, "rainbow")
@@ -104,13 +106,20 @@ def train(cfgs):
     def train_fn(epoch, env_step):
         # 在每次训练前执行的操作
         # eps annealing, just a demo
-        if env_step <= 10000:
-            policy.set_eps(cfgs.eps_train)
-        elif env_step <= 50000:
-            eps = cfgs.eps_train - (env_step - 10000) / 40000 * (0.9 * cfgs.eps_train)
-            policy.set_eps(eps)
+
+        # if env_step <= 10000:
+        #     policy.set_eps(cfgs.eps_train)
+        # elif env_step <= 50000:
+        #     eps = cfgs.eps_train - (env_step - 10000) / 40000 * (0.9 * cfgs.eps_train)
+        #     policy.set_eps(eps)
+        # else:
+        #     policy.set_eps(0.1 * cfgs.eps_train)
+
+        if env_step >= cfgs.exploration.decay:
+            policy.set_eps(cfgs.exploration.end)
         else:
-            policy.set_eps(0.1 * cfgs.eps_train)
+            policy.set_eps((cfgs.exploration.start - cfgs.exploration.end) * (1 - env_step / cfgs.exploration.decay) + cfgs.exploration.end)
+
         # beta annealing, just a demo
         if cfgs.prioritized_replay:
             if env_step <= 10000:

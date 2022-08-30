@@ -134,7 +134,7 @@ class Processor:
         assert self.env_last_distance[env_id] is not None
 
         # distance_reward = (self.env_last_distance[env_id] - distance_with_target) / (self.target_speed * self.dt)
-        distance_reward = (self.env_last_distance[env_id] - distance_with_target) * 2
+        distance_reward = (self.env_last_distance[env_id] - distance_with_target) * 0.2
 
         self.env_last_distance[env_id] = distance_with_target
 
@@ -150,7 +150,7 @@ class Processor:
         car_forward_acc = car_status[4]
         car_forward_jerk = None
         if abs(car_forward_acc) > 2:
-            brake_reward = -100
+            brake_reward = -10
         else:
             brake_reward = 0
         """
@@ -162,7 +162,7 @@ class Processor:
         car_lateral_acc = car_status[5]
         car_lateral_jerk = None
         if abs(car_lateral_acc) > 4:
-            turn_reward = -100
+            turn_reward = -10
         else:
             turn_reward = 0
 
@@ -190,18 +190,18 @@ class Processor:
             self.logger.info('Env:' + str(env_id) + 'next_obs[\'map\'] is None!!!\tUse inf as speed limit to keep running!')
         car_speed = car_status[3]  # 当前车速
         if car_speed > speed_limit:
-            high_speed_reward = -150
+            high_speed_reward = -15
         else:
             high_speed_reward = 0
 
         rule_reward = brake_reward + turn_reward + high_speed_reward
 
         if info["collided"]:  # 碰撞
-            end_reward = -1000
+            end_reward = -100
         elif info["reached_stoparea"]:  #
-            end_reward = 1000
+            end_reward = 100
         elif info["timeout"]:  # 超时未完成
-            end_reward = -1000
+            end_reward = -100
         else:
             end_reward = 0.0  # 尚未 terminate
 
