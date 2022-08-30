@@ -88,9 +88,7 @@ class EnvWorker(mp.Process):
                     try:
                         episode = Episode()
                         obs = self.env.reset()
-                        self.env_post_processer.reset(obs)
-                        env_state = self.env_post_processer.assemble_surr_obs(obs, self.env)
-                        vec_state = self.env_post_processer.assemble_ego_vec_obs(obs)
+                        vec_state, env_state = self.env_post_processer.reset(obs)
                         while Get_Enough_Batch.value == 0:
                             with torch.no_grad():
                                 action, gaussian_action, logproba, value = policy.select_action(env_state, vec_state)
@@ -104,13 +102,7 @@ class EnvWorker(mp.Process):
                             steer = self.lmap(action[0],[-1.0, 1.0],[-0.3925, 0.3925],)
                             acc = self.lmap(action[1], [-1.0, 1.0], [-6.0, 2.0])
                             obs, reward, done, info = self.env.step(np.array([steer, acc]))
-                            # done_reason = info.get("DoneReason", "")
-                            # if not done:
-                            #     if done_reason == DoneReason.INFERENCE_DONE:
-                            #         break
-                            #     elif done_reason == DoneReason.Runtime_ERROR:
-                            #         break
-                            new_env_state = self.env_post_processer.assemble_surr_obs(obs, self.env)
+                            new_env_state = self.env_post_processer.assemble_surr_vec_obs(obs)
                             new_vec_state = self.env_post_processer.assemble_ego_vec_obs(obs)
                             reward = self.env_post_processer.assemble_reward(obs, info)
                             mask = 0 if done else 1

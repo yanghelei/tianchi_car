@@ -13,6 +13,7 @@ import torch.nn as nn
 import torch.optim as opt
 import sys 
 sys.path.append(os.path.split(os.path.dirname(os.path.abspath(__file__)))[0] + '/')
+print(sys.path)
 from tensorboardX import SummaryWriter
 from train.config import PolicyParam
 from train.policy import PPOPolicy
@@ -299,16 +300,17 @@ class MulProPPO:
                 )
                 self.sampler.save(self.model_dir)
             if (time.time() - self.start_time) > 9*3600:
-                torch.save(
-                    self.model.state_dict(), self.model_dir + "network.pth"
-                )
-                self.sampler.save(self.model_dir)
-                import shutil
-                from pathlib import Path
-                # 存储到云端
-                save_path = str(Path(os.path.dirname(__file__)).parent.parent.resolve() / 'myspace')
-                shutil.copy(self.model_dir + "network_{}.pth".format(i_episode), save_path)
-                self.sampler.save(save_path)
+                break
+        torch.save(
+            self.model.state_dict(), self.model_dir + "network.pth"
+        )
+        self.sampler.save(self.model_dir)
+        import shutil
+        from pathlib import Path
+        # 存储到云端
+        save_path = str(Path(os.path.dirname(__file__)).parent.parent.resolve() / 'myspace')
+        shutil.copy(self.model_dir + "network_{}.pth".format(i_episode), save_path)
+        self.sampler.save(save_path)
 
         self.sampler.close()
 

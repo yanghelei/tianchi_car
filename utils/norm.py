@@ -63,7 +63,7 @@ class Normalization(nn.Module):
         mean, var = self.running_mean_var()
         out = (input_vector - mean[(None,) * self.norm_axes]) / torch.sqrt(var)[(None,) * self.norm_axes]
         
-        return out
+        return out.cpu().numpy()
 
     def denormalize(self, input_vector):
         """ Transform normalized data back into original distribution """

@@ -4,6 +4,7 @@
 # *****************************************************************************
 
 import collections
+from copy import deepcopy
 import math
 import os
 from typing import Dict
@@ -12,13 +13,10 @@ import numpy
 import torch
 import torch as ch
 import torch.nn as nn
-
-from cvxpy import vec
 from train.config import PolicyParam
 from train.np_image import NPImage
 from utils.norm import Normalization
 import numpy as np 
-from geek.env.matrix_env import DoneReason
 
 STD = 2 ** 0.5
 
@@ -30,58 +28,6 @@ def file_name(file_dir, file_type):
             if os.path.splitext(file)[1] == file_type:
                 L.append(os.path.join(dirpath, file))
     return L
-
-
-# class RunningMeanStd:
-#     # Dynamically calculate mean and std
-#     def __init__(self, shape):  # shape:the dimension of input data
-#         self.n = 0
-#         self.mean = numpy.zeros(shape)
-#         self.S = numpy.zeros(shape)
-#         self.std = numpy.sqrt(self.S)
-
-#     def update(self, x):
-#         x = numpy.array(x)
-#         self.n += 1
-#         if self.n == 1:
-#             self.mean = x
-#             self.std = x
-#         else:
-#             old_mean = self.mean.copy()
-#             self.mean = old_mean + (x - old_mean) / self.n
-#             self.S = self.S + (x - old_mean) * (x - self.mean)
-#             self.std = numpy.sqrt(self.S / self.n)
-
-
-# class RewardScaling:
-#     def __init__(self, shape, gamma):
-#         self.shape = shape  # reward shape=1
-#         self.gamma = gamma  # discount factor
-#         self.running_ms = RunningMeanStd(shape=self.shape)
-#         self.R = numpy.zeros(self.shape)
-
-#     def __call__(self, x):
-#         self.R = self.gamma * self.R + x
-#         self.running_ms.update(self.R)
-#         x = x / (self.running_ms.std + 1e-8)  # Only divided std
-#         return x
-
-#     def reset(self):  # When an episode is done,we should reset 'self.R'
-#         self.R = numpy.zeros(self.shape)
-
-
-# class Normalization:
-#     def __init__(self, shape):
-#         self.running_ms = RunningMeanStd(shape=shape)
-
-#     def __call__(self, x, update=True):
-#         # Whether to update the mean and std,during the evaluating,update=Flase
-#         if update:
-#             self.running_ms.update(x)
-#         x = (x - self.running_ms.mean) / (self.running_ms.std + 1e-8)
-
-#         return x
-
 
 def initialize_weights(mod, initialization_type, scale=STD):
     """
@@ -217,21 +163,6 @@ class EnvPostProcsser:
             self.vec_deque.append(numpy.zeros(self.vec_length))
         # self.tianchi_cnn = TianchiCNN()  # not used
 
-    # def assemble_surr_cnn_obs(self, observation, env):
-    #     """
-    #     not used
-    #     """
-    #     centers = {}
-    #     for lane in observation["map"].lanes:
-    #         lane_id = lane.lane_id
-    #         centers[lane_id] = env.centers_by_lane_id(lane_id)
-            
-    #     img_obs = self.tianchi_cnn.draw_from_obs(observation, centers).astype(numpy.float32)
-    #     img_obs = self.surr_cnn_normalize(img_obs)
-    #     self.surr_img_deque.append(img_obs)
-    #     cnn_obs = numpy.concatenate(list(self.img_deque), axis=2)
-    #     sur_state = torch.Tensor(cnn_obs).float().unsqueeze(0).permute(0, 3, 2, 1)
-    #     return sur_state
     def process_surr_vec_obs(self, observation) -> np.array :
 
         curr_xy = (observation["player"]["status"][0],  # 车辆后轴中心位置 x
@@ -263,20 +194,21 @@ class EnvPostProcsser:
 
         return curr_surr_obs
 
-    def assemble_surr_vec_obs(self, observation) -> torch.tensor:
+    def assemble_surr_vec_obs(self, obs, update_norm=True) -> torch.tensor:
         
-        curr_surr_obs = self.process_surr_vec_obs(observation)
+        obs = deepcopy(obs)
+        curr_surr_obs = self.process_surr_vec_obs(obs)
         # 加入到末尾帧
         self.surr_vec_deque.append(curr_surr_obs)
         surr_vec_obs = np.array(list(self.surr_vec_deque))
         # 归一化
-        self.surr_vec_normalize.update(surr_vec_obs[-1])
+        if update_norm:
+            self.surr_vec_normalize.update(surr_vec_obs[-1])
         surr_vec_obs[-1] = self.surr_vec_normalize.normalize(surr_vec_obs[-1])
         sur_state = torch.Tensor(surr_vec_obs).float().unsqueeze(0)
         return sur_state
 
     def process_ego_vec_obs(self, observation) -> np.array:
-
         target_xy = (
             (observation["player"]["target"][0] + observation["player"]["target"][4]) / 2, # 目标区域中心位置x
             (observation["player"]["target"][1] + observation["player"]["target"][5]) / 2, # 目标区域中心位置y
@@ -289,10 +221,14 @@ class EnvPostProcsser:
         prev_acc = observation["player"]["status"][8] # 上一个加速度命令
         lane_list = []
         
-        for lane_info in observation["map"].lanes:
-            lane_list.append(lane_info.lane_id)
-        current_lane_index = lane_list.index(observation["map"].lane_id)
-        current_offset = observation["map"].lane_offset
+        if observation['map'] is not None:
+            for lane_info in observation["map"].lanes:
+                lane_list.append(lane_info.lane_id)
+            current_lane_index = lane_list.index(observation["map"].lane_id)
+            current_offset = observation["map"].lane_offset
+        else:
+            current_lane_index = -1
+            current_offset = 0
         vec_obs = numpy.array(
             [
                 delta_xy[0],  # 目标区域与当前位置的偏差x
@@ -305,17 +241,19 @@ class EnvPostProcsser:
                 current_offset,  # 车道的偏移量
             ]
         )
-
+        self.pre_vec_obs = vec_obs
         return vec_obs
 
-    def assemble_ego_vec_obs(self, observation) -> torch.tensor:
-        
+    def assemble_ego_vec_obs(self, obs, update_norm=True) -> torch.tensor:
+
+        observation = deepcopy(obs)
         vec_obs = self.process_ego_vec_obs(observation)
         # 添加到末尾帧
         self.vec_deque.append(vec_obs)
         mlp_obs = numpy.array(list(self.vec_deque))
         # 归一化
-        self.ego_vec_normalize.update(mlp_obs[-1])
+        if update_norm:
+            self.ego_vec_normalize.update(mlp_obs[-1])
         mlp_obs[-1] = self.ego_vec_normalize.normalize(mlp_obs[-1])
         ego_state = torch.Tensor(mlp_obs).float().unsqueeze(0)
         
@@ -347,38 +285,29 @@ class EnvPostProcsser:
         else:
             end_reward = 0.0
         
-        # if DoneReason.COLLIDED == info.get("DoneReason", ""):
-        #     end_reward = -200
-        # elif DoneReason.MAX_EXP_STEP == info.get("DoneReason", ""):
-        #     end_reward = -200
-        # elif DoneReason.TIMEOUT == info.get("DoneReason", ""):
-        #     end_reward = -200
-        # elif info["reached_stoparea"]:
-        #     end_reward = 200
-        # else:
-        #     end_reward = 0
-        
         # add penalty when reaching close to other cars
             
         return distance_reward + end_reward + step_reward
 
-    def assemble_surr_obs(self, observation, env):
-        if self.obs_type is "cnn":
-            return self.assemble_surr_cnn_obs(observation=observation, env=env)
-        elif self.obs_type is "vec":
-            return self.assemble_surr_vec_obs(observation=observation)
-        else:
-            raise Exception("error observation type")
-
-    def reset(self, initial_obs):
+    def reset(self, initial_obs, update_norm=True):
         self.prev_distance = None
         # self.reward_scale.reset()
         # self.img_deque = collections.deque(maxlen=5)
         # 填充初始帧
         ego_vec_state = self.process_ego_vec_obs(initial_obs)
         sur_vec_state = self.process_surr_vec_obs(initial_obs)
+        if update_norm:
+            self.ego_vec_normalize.update(ego_vec_state)
+            self.surr_vec_normalize.update(sur_vec_state)
+        ego_vec_state = self.ego_vec_normalize.normalize(ego_vec_state)
+        sur_vec_state = self.surr_vec_normalize.normalize(sur_vec_state)
+        ego_vec_state = np.clip(ego_vec_state, -5, 5)
+        sur_vec_state = np.clip(sur_vec_state, -5, 5)
         self.vec_deque = collections.deque(maxlen=5)
         self.surr_vec_deque = collections.deque(maxlen=5)
         for i in range(self.history_length):
-            self.vec_deque.append(ego_vec_state)
-            self.surr_vec_deque.append(sur_vec_state)
+            self.vec_deque.append(ego_vec_state.flatten())
+            self.surr_vec_deque.append(sur_vec_state.flatten())
+        ego_vec_state = torch.from_numpy(numpy.array(list(self.vec_deque))).unsqueeze(0) # [1,5,8]
+        sur_vec_state = torch.from_numpy(numpy.array(list(self.surr_vec_deque))).unsqueeze(0) # [1,5,8]
+        return ego_vec_state, sur_vec_state
