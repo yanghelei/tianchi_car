@@ -106,14 +106,20 @@ class EnvWorker(mp.Process):
                                 break
                             # elif DoneReason.Runtime_ERROR == info.get("DoneReason", ""):
                             #     break
-                            new_env_state = self.env_post_processer.assemble_surr_vec_obs(obs)
-                            new_vec_state = self.env_post_processer.assemble_ego_vec_obs(obs)
-                            reward = self.env_post_processer.assemble_reward(obs, info)
+                            try:
+                                if not done:
+                                    new_env_state = self.env_post_processer.assemble_surr_vec_obs(obs)
+                                    new_vec_state = self.env_post_processer.assemble_ego_vec_obs(obs)
+                                reward = self.env_post_processer.assemble_reward(obs, info)
+                            except KeyError:
+                                print(obs)
+                                print(obs.keys())
                             mask = 0 if done else 1
                             episode.push(
                                 env_state, vec_state, value, action, gaussian_action, logproba, mask, reward, info,
                             )
                             if done:
+                                self.env.reset()
                                 with self.lock:
                                     self.queue.put(episode)
                                 break

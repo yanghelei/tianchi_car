@@ -84,9 +84,8 @@ class MulProPPO:
         
         # self.writer = Writer(self.exp_dir, openid='oWbT458Ya1xKsC1d_E_RXWf0MNos')
 
-    def update(self, batch, episode):
+    def update(self, batch, episode, batch_size):
         
-        batch_size = self.args.batch_size
         rewards = torch.from_numpy(np.array(batch.reward))
         values = torch.from_numpy(np.array(batch.value))
         masks = torch.from_numpy(np.array(batch.mask))
@@ -249,7 +248,7 @@ class MulProPPO:
             if i_episode < self.args.random_episode:
                 continue
             # update policy
-            total_loss, loss_surr, loss_value, loss_entropy, rewards = self.update(batch, i_episode)
+            total_loss, loss_surr, loss_value, loss_entropy, rewards = self.update(batch, i_episode, batch_size)
             # schedule lr and clip
             lr_now, lr_iteration_reduce = self.schedule(i_episode)
             if i_episode % self.args.log_num_episode == 0:
