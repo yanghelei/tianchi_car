@@ -142,8 +142,8 @@ class MulProPPO:
             minibatch_advantages = advantages[minibatch_ind]
             minibatch_returns = returns[minibatch_ind]
             minibatch_newvalues = self.model.get_value(minibatch_env_state).flatten()
-
             assert minibatch_oldlogproba.shape == minibatch_newlogproba.shape
+            breakpoint()
             log_ratio = minibatch_newlogproba - minibatch_oldlogproba
             ratio = torch.exp(log_ratio)
             approx_kl = torch.mean((torch.exp(log_ratio) - 1) - log_ratio).item() # aprroximate the kl

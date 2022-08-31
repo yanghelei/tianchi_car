@@ -13,7 +13,7 @@ import torch
 class PolicyParam:
     seed: int = 1234
 
-    debug = False
+    debug = True
     if debug:
         num_workers = 1
         random_episode = 0

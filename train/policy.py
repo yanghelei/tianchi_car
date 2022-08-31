@@ -121,16 +121,14 @@ class PPOPolicy(nn.Module):
         self.ego_obs_norm.update(ego_obs)
     
     def select_action(self, sur_obs, ego_obs, deterministic=False):
-        # 归一化
-        sur_obs = self.sur_obs_norm.normalize(sur_obs)
-        ego_obs = self.ego_obs_norm.normalize(ego_obs)
+
         env_feature = self.get_env_feature(sur_obs, ego_obs)
         action_mean = self.actor_net(env_feature)
         value = self.critic_net(env_feature)
         action_std = torch.exp(self.log_std)
         action_distribution = Normal(action_mean, action_std)
         # 采样
-        if deterministic:
+        if not deterministic:
             gaussian_action = action_distribution.sample()
         else:
             gaussian_action = action_mean
