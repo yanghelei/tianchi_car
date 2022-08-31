@@ -37,17 +37,14 @@ def run(worker_index):
         env_post_processer = EnvPostProcsser()
         if args.load_model:
             model.load_model(model_dir+'/network.pth', 'cpu')
-            env_post_processer.surr_vec_normalize.load_model(model_dir+"/sur_norm.pth", 'cpu')
-            env_post_processer.ego_vec_normalize.load_model(model_dir+"/ego_norm.pth", 'cpu')
-        vec_state, env_state = env_post_processer.reset(obs, update_norm=False)
+            logger.info('model has been successfully loaded')
+        vec_state, env_state = env_post_processer.reset(obs)
         while True:
             action, _, _, _ = model.select_action(env_state, vec_state, True)
             action = action.data.cpu().numpy()[0]
             steer = EnvWorker.lmap(action[0],[-1.0, 1.0],[-0.3925, 0.3925],)
             acc = EnvWorker.lmap(action[1], [-1.0, 1.0], [-6.0, 2.0])
             obs, _, done, info = env.step(numpy.array([steer, acc]))
-            env_state = env_post_processer.assemble_surr_vec_obs(obs, update_norm=False)
-            vec_state = env_post_processer.assemble_ego_vec_obs(obs, update_norm=False)
             infer_done = DoneReason.INFERENCE_DONE == info.get("DoneReason", "")
             if done and not infer_done:
                 obs = env.reset()
@@ -55,6 +52,8 @@ def run(worker_index):
                 logger.info(f"env rest")
             elif infer_done :
                 break
+            env_state = env_post_processer.assemble_surr_vec_obs(obs)
+            vec_state = env_post_processer.assemble_ego_vec_obs(obs)
     except Exception as e:
         logger.info(f"{worker_index}, error: {str(e)}")
 

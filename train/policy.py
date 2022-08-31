@@ -14,6 +14,7 @@ from train.config import PolicyParam
 from train.tools import initialize_weights
 import numpy as np 
 from torch.distributions.normal import Normal
+from utils.norm import Normalization
 
 class CnnFeatureNet(nn.Module):
     def __init__(self):
@@ -94,11 +95,14 @@ class PPOPolicy(nn.Module):
 
         # std is independent of the states (empirically better)
         self.log_std = torch.nn.Parameter(torch.zeros(num_outputs), requires_grad=True)
-
+        self.sur_obs_norm = Normalization(70)
+        self.ego_obs_norm = Normalization(8)
         initialize_weights(self, "orthogonal", scale = np.sqrt(2))
 
     def get_env_feature(self, sur_obs, ego_obs):
-
+        
+        ego_obs = self.ego_obs_norm.normalize(ego_obs)
+        sur_obs = self.sur_obs_norm.normalize(sur_obs)
         ego_feature = self.ego_feature_net(ego_obs)
         sur_feature = self.sur_feature_net(sur_obs)
         env_feature = torch.concat([ego_feature, sur_feature], dim=1)
@@ -111,7 +115,15 @@ class PPOPolicy(nn.Module):
 
         return values
 
+    def update_norm(self, sur_obs, ego_obs):
+        
+        self.sur_obs_norm.update(sur_obs)
+        self.ego_obs_norm.update(ego_obs)
+    
     def select_action(self, sur_obs, ego_obs, deterministic=False):
+        # 归一化
+        sur_obs = self.sur_obs_norm.normalize(sur_obs)
+        ego_obs = self.ego_obs_norm.normalize(ego_obs)
         env_feature = self.get_env_feature(sur_obs, ego_obs)
         action_mean = self.actor_net(env_feature)
         value = self.critic_net(env_feature)

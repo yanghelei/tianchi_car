@@ -24,8 +24,8 @@ class DoneReason:
     TIMEOUT = "Timeout"
     MAX_EXP_STEP = "MaxExpStep"
     INFERENCE_DONE = "InferenceDone"
-    RUNTIME_ERROR = "RuntimeError" # this is not exist
-
+    Runtime_Error = "RuntimeError" # this is not exist
+    
 
 Observations = namedtuple("Observations", ["obs", "reward", "done", "info"])
 

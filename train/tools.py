@@ -15,7 +15,6 @@ import torch as ch
 import torch.nn as nn
 from train.config import PolicyParam
 from train.np_image import NPImage
-from utils.norm import Normalization
 import numpy as np 
 
 STD = 2 ** 0.5
@@ -152,8 +151,6 @@ class EnvPostProcsser:
         # self.reward_scale = RewardScaling(shape=1, gamma=self.args.gamma) # not used
         # self.surr_img_deque = collections.deque(maxlen=self.history_length)
         # running mean std 
-        self.ego_vec_normalize = Normalization(8)
-        self.surr_vec_normalize = Normalization(70)
         self.surr_vec_deque = collections.deque(maxlen=self.history_length)
         self.vec_deque = collections.deque(maxlen=self.history_length)
         
@@ -194,17 +191,13 @@ class EnvPostProcsser:
 
         return curr_surr_obs
 
-    def assemble_surr_vec_obs(self, obs, update_norm=True) -> torch.tensor:
+    def assemble_surr_vec_obs(self, obs) -> torch.tensor:
         
         obs = deepcopy(obs)
         curr_surr_obs = self.process_surr_vec_obs(obs)
         # 加入到末尾帧
         self.surr_vec_deque.append(curr_surr_obs)
         surr_vec_obs = np.array(list(self.surr_vec_deque))
-        # 归一化
-        if update_norm:
-            self.surr_vec_normalize.update(surr_vec_obs[-1])
-        surr_vec_obs[-1] = self.surr_vec_normalize.normalize(surr_vec_obs[-1])
         sur_state = torch.Tensor(surr_vec_obs).float().unsqueeze(0)
         return sur_state
 
@@ -244,22 +237,21 @@ class EnvPostProcsser:
         self.pre_vec_obs = vec_obs
         return vec_obs
 
-    def assemble_ego_vec_obs(self, obs, update_norm=True) -> torch.tensor:
+    def assemble_ego_vec_obs(self, obs) -> torch.tensor:
 
         observation = deepcopy(obs)
         vec_obs = self.process_ego_vec_obs(observation)
         # 添加到末尾帧
         self.vec_deque.append(vec_obs)
         mlp_obs = numpy.array(list(self.vec_deque))
-        # 归一化
-        if update_norm:
-            self.ego_vec_normalize.update(mlp_obs[-1])
-        mlp_obs[-1] = self.ego_vec_normalize.normalize(mlp_obs[-1])
         ego_state = torch.Tensor(mlp_obs).float().unsqueeze(0)
         
         return ego_state
 
     def assemble_reward(self, observation: Dict, info: Dict) -> float:
+        if observation is None:
+            observation = self.pre_vec_obs
+            print(info) 
         target_xy = (
             (observation["player"]["target"][0] + observation["player"]["target"][4]) / 2,
             (observation["player"]["target"][1] + observation["player"]["target"][5]) / 2,
@@ -289,18 +281,14 @@ class EnvPostProcsser:
             
         return distance_reward + end_reward + step_reward
 
-    def reset(self, initial_obs, update_norm=True):
+    def reset(self, initial_obs):
         self.prev_distance = None
+        self.pre_vec_obs = None
         # self.reward_scale.reset()
         # self.img_deque = collections.deque(maxlen=5)
         # 填充初始帧
         ego_vec_state = self.process_ego_vec_obs(initial_obs)
         sur_vec_state = self.process_surr_vec_obs(initial_obs)
-        if update_norm:
-            self.ego_vec_normalize.update(ego_vec_state)
-            self.surr_vec_normalize.update(sur_vec_state)
-        ego_vec_state = self.ego_vec_normalize.normalize(ego_vec_state)
-        sur_vec_state = self.surr_vec_normalize.normalize(sur_vec_state)
         ego_vec_state = np.clip(ego_vec_state, -5, 5)
         sur_vec_state = np.clip(sur_vec_state, -5, 5)
         self.vec_deque = collections.deque(maxlen=5)

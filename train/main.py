@@ -13,12 +13,12 @@ import torch.nn as nn
 import torch.optim as opt
 import sys 
 sys.path.append(os.path.split(os.path.dirname(os.path.abspath(__file__)))[0] + '/')
-print(sys.path)
 from tensorboardX import SummaryWriter
 from train.config import PolicyParam
 from train.policy import PPOPolicy
 from train.workers import MemorySampler
 from geek.env.logger import Logger
+from geek.env.matrix_env import DoneReason
 # from ai_hub.notice import notice
 # from ai_hub import Logger as Writer
 logger = Logger.get_logger(__name__)
@@ -186,7 +186,10 @@ class MulProPPO:
             nn.utils.clip_grad_norm_(self.model.parameters(), self.args.max_grad_norm)
             self.optimizer.step()
 
-            return total_loss, loss_surr, loss_value, loss_entropy, rewards
+        # update normalization 
+        
+        self.model.update_norm(sur_obs.view(-1, sur_obs.shape[-1]), vec_obs.view(-1, vec_obs.shape[-1]))
+        return total_loss, loss_surr, loss_value, loss_entropy, rewards
 
     def schedule(self, i_episode):
         # clip linearly decreanse
@@ -297,22 +300,23 @@ class MulProPPO:
                 torch.save(
                     self.model.state_dict(), self.model_dir + "network.pth"
                 )
-                self.sampler.save(self.model_dir)
                 # 存储到云端
-                save_path = str(Path(os.path.dirname(__file__)).parent.parent.resolve() / 'myspace')
-                shutil.copy(self.model_dir + "network_{}.pth".format(i_episode), save_path)
-                self.sampler.save(save_path)
+                save_path = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace')
+                torch.save(
+                    self.model.state_dict(), save_path + "/network.pth"
+                )
+                self.logger.info(f'model has been successfully saved : {save_path}')
+                
             if (time.time() - self.start_time) > 9*3600:
                 break
         torch.save(
             self.model.state_dict(), self.model_dir + "network.pth"
         )
-        self.sampler.save(self.model_dir)
         # 存储到云端
-        save_path = str(Path(os.path.dirname(__file__)).parent.parent.resolve() / 'myspace')
-        shutil.copy(self.model_dir + "network_{}.pth".format(i_episode), save_path)
-        self.sampler.save(save_path)
-
+        save_path = str(Path(os.path.dirname(__file__)).resolve().parent.parent/ 'myspace')
+        torch.save(
+                    self.model.state_dict(), save_path + "/network.pth"
+                )
         self.sampler.close()
 
 if __name__ == "__main__":

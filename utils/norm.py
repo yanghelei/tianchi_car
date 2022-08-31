@@ -17,6 +17,7 @@ class Normalization(nn.Module):
         self.beta = beta
         self.per_element_update = per_element_update
         self.tpdv = dict(dtype=torch.float32, device=device)
+        self.device = device
 
         self.running_mean = nn.Parameter(torch.zeros(input_shape), requires_grad=False).to(**self.tpdv)
         self.running_mean_sq = nn.Parameter(torch.zeros(input_shape), requires_grad=False).to(**self.tpdv)
@@ -37,9 +38,11 @@ class Normalization(nn.Module):
 
     @torch.no_grad()
     def update(self, input_vector):
+
+        tpdv = dict(dtype=torch.float32, device=self.running_mean.device)
         if type(input_vector) == np.ndarray:
             input_vector = torch.from_numpy(input_vector)
-        input_vector = input_vector.to(**self.tpdv)
+        input_vector = input_vector.to(**tpdv)
 
         batch_mean = input_vector.mean(dim=tuple(range(self.norm_axes)))
         batch_sq_mean = (input_vector ** 2).mean(dim=tuple(range(self.norm_axes)))
@@ -54,16 +57,18 @@ class Normalization(nn.Module):
         self.running_mean_sq.mul_(weight).add_(batch_sq_mean * (1.0 - weight))
         self.debiasing_term.mul_(weight).add_(1.0 * (1.0 - weight))
 
+    @torch.no_grad()
     def normalize(self, input_vector):
         # Make sure input is float32
+        tpdv = dict(dtype=torch.float32, device=self.running_mean.device)
         if type(input_vector) == np.ndarray:
             input_vector = torch.from_numpy(input_vector)
-        input_vector = input_vector.to(**self.tpdv)
+        input_vector = input_vector.to(**tpdv)
 
         mean, var = self.running_mean_var()
         out = (input_vector - mean[(None,) * self.norm_axes]) / torch.sqrt(var)[(None,) * self.norm_axes]
         
-        return out.cpu().numpy()
+        return out
 
     def denormalize(self, input_vector):
         """ Transform normalized data back into original distribution """
@@ -81,4 +86,5 @@ class Normalization(nn.Module):
     def load_model(self, model_path, device):
 
         self.load_state_dict(torch.load(model_path, map_location=device))
+        
 

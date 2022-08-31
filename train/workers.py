@@ -108,25 +108,20 @@ class EnvWorker(mp.Process):
                                     with self.lock:
                                         self.queue.put(episode)
                                 break
-                            elif DoneReason.RUNTIME_ERROR == info.get("DoneReason", ""):
+                            elif DoneReason.Runtime_Error == info.get("DoneReason", ""):
                                 if len(episode) > 0:
                                     with self.lock:
                                         self.queue.put(episode)
                                 break
-                            try:
-                                if not done:
-                                    new_env_state = self.env_post_processer.assemble_surr_vec_obs(obs)
-                                    new_vec_state = self.env_post_processer.assemble_ego_vec_obs(obs)
-                                reward = self.env_post_processer.assemble_reward(obs, info)
-                            except KeyError:
-                                print(obs)
-                                print(obs.keys())
+                            if not done:
+                                new_env_state = self.env_post_processer.assemble_surr_vec_obs(obs)
+                                new_vec_state = self.env_post_processer.assemble_ego_vec_obs(obs)
+                            reward = self.env_post_processer.assemble_reward(obs, info)
                             mask = 0 if done else 1
                             episode.push(
                                 env_state, vec_state, value, action, gaussian_action, logproba, mask, reward, info,
                             )
                             if done:
-                                self.env.reset()
                                 with self.lock:
                                     self.queue.put(episode)
                                 break
@@ -194,7 +189,3 @@ class MemorySampler(object):
             remote.send(("close", None))
         for worker in self.workers:
             worker.join()
-
-    def save(self, path):
-        torch.save(self.workers[0].env_post_processer.ego_vec_normalize.state_dict(), path+'/ego_norm.pth')
-        torch.save(self.workers[0].env_post_processer.surr_vec_normalize.state_dict(), path+'/sur_norm.pth')
