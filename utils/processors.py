@@ -9,7 +9,7 @@ from utils.math import compute_distance
 
 
 class Processor:
-    def __init__(self, cfgs, model, mode='train'):
+    def __init__(self, cfgs, model, logger, mode='train'):
 
         self.mode = mode
 
@@ -24,7 +24,9 @@ class Processor:
         self.sur_dim = cfgs.network.sur_dim
         self.ego_dim = cfgs.network.ego_dim
 
-        self.logger = None
+        self.logger = logger
+
+        self.dt = cfgs.dt
 
         # self.surr_vec_deque = collections.deque(maxlen=cfgs.history_length)
 
@@ -94,7 +96,7 @@ class Processor:
         else:  # 按照主办方的说法，车开到道路外有可能出现 none 的情况
             current_lane_index = -1.0
             current_offset = 0.0
-            self.logger.info('Env:' + str(env_id) + '\tobs[\'map\'] is None in get_observation(obs)!!!\tUse -1 as lane_index and 0.0 offset as to keep running!')
+            # self.logger.info('Env:' + str(env_id) + '\tobs[\'map\'] is None in get_observation(obs)!!!\tUse -1 as lane_index and 0.0 offset as to keep running!')
 
         ego_obs = np.array(
             [[
@@ -134,13 +136,14 @@ class Processor:
         assert self.env_last_distance[env_id] is not None
 
         # distance_reward = (self.env_last_distance[env_id] - distance_with_target) / (self.target_speed * self.dt)
-        distance_reward = (self.env_last_distance[env_id] - distance_with_target) * 0.2
+        distance_reward = (self.env_last_distance[env_id] - distance_with_target)
 
         self.env_last_distance[env_id] = distance_with_target
 
         step_reward = -1
 
         car_status = next_obs['player']['status']
+        last_car_status = self.env_last_obs[env_id]['player']['status']
         """
             急刹
             判据: 1.纵向加速度绝对值大于2；
@@ -148,8 +151,8 @@ class Processor:
             扣分: 10分每次，最高30；
         """
         car_forward_acc = car_status[4]
-        car_forward_jerk = None
-        if abs(car_forward_acc) > 2:
+        last_car_forward_acc = last_car_status[4]
+        if abs(car_forward_acc) > 2 or abs((last_car_forward_acc-car_forward_acc)/self.dt) > 0.9:
             brake_reward = -10
         else:
             brake_reward = 0
@@ -160,8 +163,8 @@ class Processor:
             扣分: 10分每次，最高30；
         """
         car_lateral_acc = car_status[5]
-        car_lateral_jerk = None
-        if abs(car_lateral_acc) > 4:
+        last_car_lateral_acc = last_car_status[5]
+        if abs(car_lateral_acc) > 4 or abs((car_lateral_acc-last_car_lateral_acc)/self.dt) > 0.9:
             turn_reward = -10
         else:
             turn_reward = 0
@@ -184,10 +187,10 @@ class Processor:
                     break
             if speed_limit is None:
                 speed_limit = inf
-                self.logger.info('Env:' + str(env_id) + 'Not find current lane\'s speed limit!!!\tUse inf to keep running!')
+                # self.logger.info('Env:' + str(env_id) + 'Not find current lane\'s speed limit!!!\tUse inf to keep running!')
         else:  # 按照主办方的说法，车开到道路外有可能出现 none 的情况
             speed_limit = inf
-            self.logger.info('Env:' + str(env_id) + 'next_obs[\'map\'] is None!!!\tUse inf as speed limit to keep running!')
+            # self.logger.info('Env:' + str(env_id) + 'next_obs[\'map\'] is None!!!\tUse inf as speed limit to keep running!')
         car_speed = car_status[3]  # 当前车速
         if car_speed > speed_limit:
             high_speed_reward = -15
@@ -228,7 +231,7 @@ class Processor:
                 self.env_last_obs[_id] = kwargs['obs_next'][_idx]
             obs_next = np.array(obs_next)
             rew = np.array(rew)
-            return Batch(obs_next=obs_next, rew=rew, done=kwargs['done'], info=kwargs['info'], policy=kwargs['policy'], env_id=kwargs['env_id'])
+            return Batch(obs_next=obs_next, rew=rew, done=kwargs['done'], policy=kwargs['policy'])
         else:
             obs = [None] * len(kwargs['env_id'])
             for _idx, _id in enumerate(kwargs['env_id']):
@@ -236,7 +239,7 @@ class Processor:
                 self.env_last_obs[_id] = kwargs['obs'][_idx]
                 self.update_distance_to_target(_id)
             obs = np.array(obs)
-            return Batch(obs=obs, env_id=kwargs['env_id'])
+            return Batch(obs=obs)
 
 
 def set_seed(seed=1):

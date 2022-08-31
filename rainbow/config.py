@@ -4,7 +4,7 @@ from math import pi
 from easydict import EasyDict
 
 config = dict(
-    exp_name='car_onppo_seed0',
+    exp_name='rainbow',
 
     seed=1,
     # task='CartPole-v1',
@@ -31,11 +31,11 @@ config = dict(
 
     noisy_std=0.1,
     n_step=5,  # the number of steps to look ahead. Default to 1.
-    target_update_freq=200,
+    target_update_freq=2e4,
 
     epoch=1e7,
-    step_per_epoch=1e4,  # the number of transitions collected per epoch
-    step_per_collect=14,  # trainer will collect "step_per_collect" transitions and do some policy network update repeatedly in each epoch.
+    step_per_epoch=1.4e4,  # the number of transitions collected per epoch
+    step_per_collect=1.4e3,  # trainer will collect "step_per_collect" transitions and do some policy network update repeatedly in each epoch.
     update_per_step=0.125,
 
     batch_size=256,  # the batch size of sample data, which is going to feed in the policy network
@@ -44,7 +44,7 @@ config = dict(
     training_num=14,  # 用于训练的环境数目
     test_num=10,  # the number of episodes for one policy evaluation
 
-    logdir='/myspace/rainbow_v1.1',
+    logdir='/myspace/rainbow_v1.2',
     render=0.0,
 
     prioritized_replay=True,
@@ -57,8 +57,8 @@ config = dict(
 
     device='cuda' if torch.cuda.is_available() else 'cpu',
 
-    action_low=np.array([-pi / 4.0, -6.0]),
-    action_high=np.array([pi / 4.0, 2.0]),
+    action_low=np.array([-pi / 4.0, -2]),
+    action_high=np.array([pi / 4.0,  2]),
     action_per_dim=(11, 11),
 
     network=dict(
@@ -67,10 +67,11 @@ config = dict(
         ego_dim=8,
         ego_hidden=64,
         total_hidden=256,
-        action_hidden=(256, 256),
+        action_hidden=(256, 128),
     ),
 
     max_consider_nps=10,
+    dt=0.1
     # history_length=5,
 
 )
