@@ -102,10 +102,17 @@ class EnvWorker(mp.Process):
                             steer = self.lmap(action[0],[-1.0, 1.0],[-0.3925, 0.3925],)
                             acc = self.lmap(action[1], [-1.0, 1.0], [-6.0, 2.0])
                             obs, reward, done, info = self.env.step(np.array([steer, acc]))
+                            # 出现error则则放弃本帧的数据
                             if DoneReason.INFERENCE_DONE == info.get("DoneReason", ""):
+                                if len(episode) > 0:
+                                    with self.lock:
+                                        self.queue.put(episode)
                                 break
-                            # elif DoneReason.Runtime_ERROR == info.get("DoneReason", ""):
-                            #     break
+                            elif DoneReason.RUNTIME_ERROR == info.get("DoneReason", ""):
+                                if len(episode) > 0:
+                                    with self.lock:
+                                        self.queue.put(episode)
+                                break
                             try:
                                 if not done:
                                     new_env_state = self.env_post_processer.assemble_surr_vec_obs(obs)
