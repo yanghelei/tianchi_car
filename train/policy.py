@@ -101,8 +101,8 @@ class PPOPolicy(nn.Module):
 
     def get_env_feature(self, sur_obs, ego_obs):
         
-        ego_obs = self.ego_obs_norm.normalize(ego_obs)
-        sur_obs = self.sur_obs_norm.normalize(sur_obs)
+        ego_obs = torch.clamp(self.ego_obs_norm.normalize(ego_obs), min=-5, max=5)
+        sur_obs = torch.clamp(self.sur_obs_norm.normalize(sur_obs), min=-5, max=5)
         ego_feature = self.ego_feature_net(ego_obs)
         sur_feature = self.sur_feature_net(sur_obs)
         env_feature = torch.concat([ego_feature, sur_feature], dim=1)
