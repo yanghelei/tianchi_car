@@ -2,6 +2,8 @@ import itertools
 import numpy as np
 from tianshou.policy import RainbowPolicy
 
+from rainbow.config import cfg
+
 
 class MyRainbow(RainbowPolicy):
 
@@ -9,7 +11,7 @@ class MyRainbow(RainbowPolicy):
         mesh = [np.linspace(lo, hi, a) for lo, hi, a in zip(cfgs.action_low, cfgs.action_high, cfgs.action_per_dim)]
         self.action_library = list(itertools.product(*mesh))
 
-    def map_action(self, act):
+    def map_action(self, data):
         """Map raw network output to action range in gym's env.action_space.
 
         This function is called in :meth:`~tianshou.data.Collector.collect` and only
@@ -28,8 +30,29 @@ class MyRainbow(RainbowPolicy):
             space.
         """
         assert hasattr(self, 'action_library')
-        assert len(act.shape) <= 2, f"Unknown action format with shape {act.shape}."
-        if len(act.shape) == 1:
-            return np.array([self.action_library[int(a)] for a in act])
-        return np.array([[self.action_library[int(a)] for a in a_] for a_ in act])
+        assert len(data.act.shape) <= 2, f"Unknown action format with shape {data.act.shape}."
+
+        obs = data.obs['ego_obs']['data']
+        act = data.act
+
+        if len(data.act.shape) == 1:
+            action = list()
+            for _idx in range(len(act)):
+                _act = act[_idx]
+                _steer, _jerk = self.action_library[_act]
+                _acc = np.clip(obs[_idx][0][4] + _jerk * cfg.dt, -2.0, 2.0)
+                action.append([_steer, _acc])
+            return np.array(action, dtype=np.float32)
+        # if len(data.act.shape) == 1:
+        #     return np.array([self.action_library[int(a)] for a in data.act])
+        # return np.array([[self.action_library[int(a)] for a in a_] for a_ in data.act])
+
+    def sync_weight(self) -> None:
+        """Synchronize the weight for the target network."""
+        self.model_old.load_state_dict(self.model.state_dict())
+        self.logger.info(f'Policy Parameters Updated!')
+
+    def set_logger(self, logger):
+        if not hasattr(self, 'logger'):
+            setattr(self, 'logger', logger)
 

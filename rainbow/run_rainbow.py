@@ -22,8 +22,11 @@ from utils.processors import set_seed, Processor
 # from utils.exploration import get_epsilon_greedy_fn
 
 
-def make_train_env(cfgs):
-    env = gym.make(cfgs.task, scenarios=Scenarios.TRAINING)
+def make_train_env(cfgs, render_id=None):
+    if render_id:
+        env = gym.make(cfgs.task, scenarios=Scenarios.TRAINING, render_id=str(render_id))
+    else:
+        env = gym.make(cfgs.task, scenarios=Scenarios.TRAINING)
     if not hasattr(env, 'action_space'):
         setattr(env, 'action_space', cfgs.action_space)
     return env
@@ -37,7 +40,7 @@ def make_test_env(cfgs):
 
 
 def train(cfgs):
-    train_envs = SubprocVectorEnv([lambda: make_train_env(cfgs) for _ in range(cfgs.training_num)])
+    train_envs = SubprocVectorEnv([lambda: make_train_env(cfgs, i) for i in range(cfgs.training_num)])
     test_envs = DummyVectorEnv([lambda: make_train_env(cfgs) for _ in range(15-cfgs.training_num)])
 
     set_seed(seed=cfgs.seed)
@@ -82,8 +85,8 @@ def train(cfgs):
 
     logger.logger.info('device: ' + str(cfgs.device))
 
-    train_processor = Processor(cfgs, net, logger.logger)
-    test_processor = Processor(cfgs, net, logger.logger, mode='test')
+    train_processor = Processor(cfgs, net, logger.logger, n_env=cfgs.training_num)
+    test_processor = Processor(cfgs, net, logger.logger, n_env=15-cfgs.training_num)
 
     # collector
     train_collector = MyCollector(policy, train_envs, buf, preprocess_fn=train_processor.preprocess_fn, exploration_noise=True)
@@ -91,7 +94,10 @@ def train(cfgs):
     test_collector = MyCollector(policy, test_envs, preprocess_fn=test_processor.preprocess_fn, exploration_noise=False)
     test_collector.set_logger(logger.logger)
 
-    train_collector.collect(n_step=cfgs.batch_size * cfgs.training_num, random=False)
+    # policy logger
+    policy.set_logger(logger.logger)
+
+    train_collector.collect(n_step=cfgs.batch_size * cfgs.training_num, random=True)
 
     def save_best_fn(policy):
         # 保存最优模型
@@ -182,7 +188,7 @@ def evaluate(cfgs, policy):
     policy.eval()
     policy.set_eps(cfgs.eps_test)
     collector = MyCollector(policy, env)
-    result = collector.collect(n_episode=10, render=cfgs.render)
+    result = collector.collect(n_episode=20, render=cfgs.render)
     rews, lens = result["rews"], result["lens"]
     print(f"The trained model reward: {rews.mean()}, length: {lens.mean()}")
 

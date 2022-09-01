@@ -5,6 +5,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tianshou.utils import TensorboardLogger
 
 from geek.env.logger import Logger
+from math import inf
 
 
 class MyLogger(TensorboardLogger):
@@ -36,7 +37,7 @@ class MyLogger(TensorboardLogger):
             best_reward = ea.scalars.Items("best/reward")[-1].step
             best_reward_std = ea.scalars.Items("best/reward_std")[-1].step
         except KeyError:
-            best_epoch, best_reward, best_reward_std = 0, 0, 0
+            best_epoch, best_reward, best_reward_std = -1, -inf, 0
 
         return best_epoch, best_reward, best_reward_std
 

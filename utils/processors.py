@@ -8,12 +8,96 @@ from tianshou.data import Batch
 from utils.math import compute_distance
 
 
+def get_observation_for_test(cfg, obs):
+    curr_xy = (obs["player"]["status"][0], obs["player"]["status"][1])  # 车辆后轴中心位置
+    npc_info_dict = {}
+
+    for npc_info in obs["npcs"]:
+        if int(npc_info[0]) == 0:
+            continue
+        npc_info_dict[np.sqrt((npc_info[2] - curr_xy[0]) ** 2 + (npc_info[3] - curr_xy[1]) ** 2)] = [
+            npc_info[2] - curr_xy[0],  # dx
+            npc_info[3] - curr_xy[1],  # dy
+            npc_info[4],  # 障碍物朝向
+            np.sqrt(npc_info[5] ** 2 + npc_info[6] ** 2),  # 障碍物速度大小（标量）
+            np.sqrt(npc_info[7] ** 2 + npc_info[8] ** 2),  # 障碍物加速度大小（标量）
+            npc_info[9],  # 障碍物宽度
+            npc_info[10],  # 障碍物长度
+        ]
+    if len(npc_info_dict) == 0:
+        sur_obs_list = np.zeros((cfg.max_consider_nps, cfg.network.sur_dim))
+        n_sur = 1
+    else:
+        # 按距离由近至远排列
+        sorted_npc_info_dict = dict(sorted(npc_info_dict.items(), key=lambda x: x[0]))
+        sur_obs_list = list(sorted_npc_info_dict.values())
+        n_sur = len(sur_obs_list)
+        for _ in range(cfg.max_consider_nps - n_sur):
+            sur_obs_list.append(list(np.zeros(cfg.network.sur_dim)))
+        sur_obs_list = np.array(sur_obs_list)[:cfg.max_consider_nps, :]
+
+    # sur_obs_list = list(sorted_npc_info_dict.values())
+    # # 若数量不足 surr_number 则补齐
+    # for _ in range(cfg.surr_number - len(sur_obs_list)):
+    #     sur_obs_list.append(list(np.zeros(cfg.surr_vec_length)))
+    # # 截断
+    # curr_surr_obs = np.array(sur_obs_list).reshape(-1)[: cfg.surr_number * 7]
+
+    target_xy = (
+        (obs["player"]["target"][0] + obs["player"]["target"][4]) / 2,  # 目标区域中心位置x
+        (obs["player"]["target"][1] + obs["player"]["target"][5]) / 2,  # 目标区域中心位置y
+    )
+    curr_xy = (obs["player"]["status"][0], obs["player"]["status"][1])  # 当前车辆位置
+    delta_xy = (target_xy[0] - curr_xy[0], target_xy[1] - curr_xy[1])  # 目标区域与当前位置的绝对偏差
+    curr_yaw = obs["player"]["status"][2]  # 当前朝向
+    curr_velocity = obs["player"]["status"][3]  # 当前车辆后轴中心纵向速度
+    prev_steer = obs["player"]["status"][7]  # 上一个前轮转角命令
+    prev_acc = obs["player"]["status"][8]  # 上一个加速度命令
+    lane_list = []
+
+    if obs["map"] is not None:
+        for lane_info in obs["map"].lanes:
+            lane_list.append(lane_info.lane_id)
+        current_lane_index = lane_list.index(obs["map"].lane_id)
+        current_offset = obs["map"].lane_offset
+    else:  # 按照主办方的说法，车开到道路外有可能出现 none 的情况
+        current_lane_index = -1.0
+        current_offset = 0.0
+        # self.logger.info('Env:' + str(env_id) + '\tobs[\'map\'] is None in get_observation(obs)!!!\tUse -1 as lane_index and 0.0 offset as to keep running!')
+
+    ego_obs = np.array(
+        [[
+            delta_xy[0],  # 目标区域与当前位置的偏差x
+            delta_xy[1],  # 目标区域与当前位置的偏差y
+            curr_yaw,  # 当前车辆的朝向角
+            curr_velocity,  # 车辆后轴当前纵向速度
+            prev_steer,  # 上一个前轮转角命令
+            prev_acc,  # 上一个加速度命令
+            current_lane_index,  # 当前所处车道的id
+            current_offset,  # 车道的偏移量
+        ]]
+    )
+
+    obs = dict(
+        sur_obs=dict(
+            n=n_sur,
+            data=sur_obs_list
+        ),
+        ego_obs=dict(
+            n=1,
+            data=ego_obs
+        )
+    )
+
+    obs = np.array([obs])
+
+    return Batch(obs=obs, act={}, rew={}, done={}, obs_next={}, info={}, policy={})
+
+
 class Processor:
-    def __init__(self, cfgs, model, logger, mode='train'):
+    def __init__(self, cfgs, model, logger, n_env, update_norm=True):
 
-        self.mode = mode
-
-        self.n_env = cfgs.training_num if mode == 'train' else 15 - cfgs.training_num
+        self.n_env = n_env
 
         self.envs_id = [i for i in range(self.n_env)]
         self.env_last_obs = [None] * self.n_env
@@ -27,6 +111,8 @@ class Processor:
         self.logger = logger
 
         self.dt = cfgs.dt
+
+        self.update_norm = update_norm
 
         # self.surr_vec_deque = collections.deque(maxlen=cfgs.history_length)
 
@@ -121,8 +207,9 @@ class Processor:
                 data=ego_obs
             )
         )
-        self.model.sur_norm.update(sur_obs_list)
-        self.model.ego_norm.update(ego_obs)
+        if self.update_norm:
+            self.model.sur_norm.update(sur_obs_list[:n_sur])
+            self.model.ego_norm.update(ego_obs)
         return obs
 
     def compute_reward(self, env_id, next_obs, info):
@@ -136,7 +223,7 @@ class Processor:
         assert self.env_last_distance[env_id] is not None
 
         # distance_reward = (self.env_last_distance[env_id] - distance_with_target) / (self.target_speed * self.dt)
-        distance_reward = (self.env_last_distance[env_id] - distance_with_target)
+        distance_reward = (self.env_last_distance[env_id] - distance_with_target) * 0.5
 
         self.env_last_distance[env_id] = distance_with_target
 
@@ -151,6 +238,10 @@ class Processor:
             扣分: 10分每次，最高30；
         """
         car_forward_acc = car_status[4]
+
+        if car_forward_acc != car_status[8]:
+            self.logger.info(f'Now forward acc is {car_forward_acc}, last action acc is {car_status[8]}!')
+
         last_car_forward_acc = last_car_status[4]
         if abs(car_forward_acc) > 2 or abs((last_car_forward_acc-car_forward_acc)/self.dt) > 0.9:
             brake_reward = -10

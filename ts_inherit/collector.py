@@ -2,7 +2,7 @@ import time
 import torch
 import warnings
 import numpy as np
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 from tianshou.data import (
     Batch,
@@ -161,7 +161,7 @@ class MyCollector(Collector):
                 self.data.update(policy=policy, act=act)
 
             # get bounded and remapped actions first (not saved into buffer)
-            action_remap = self.policy.map_action(self.data.act)
+            action_remap = self.policy.map_action(self.data)
             # step in env
             result = self.env.step(action_remap, ready_env_ids)  # type: ignore
             obs_next, rew, done, info = result

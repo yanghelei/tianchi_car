@@ -20,7 +20,7 @@ config = dict(
     # eps_train=0.1,
     eps_test=0.01,
 
-    buffer_size=2e5,
+    buffer_size=3e5,
 
     lr=1e-4,
     gamma=0.99,
@@ -31,12 +31,12 @@ config = dict(
 
     noisy_std=0.1,
     n_step=5,  # the number of steps to look ahead. Default to 1.
-    target_update_freq=2e4,
+    target_update_freq=1.4e4,  # v1.2 origin:2e4 take about 3h to update once policy
 
     epoch=1e7,
     step_per_epoch=1.4e4,  # the number of transitions collected per epoch
-    step_per_collect=1.4e3,  # trainer will collect "step_per_collect" transitions and do some policy network update repeatedly in each epoch.
-    update_per_step=0.125,
+    step_per_collect=2.8e3,  # trainer will collect "step_per_collect" transitions and do some policy network update repeatedly in each epoch.
+    update_per_step=0.2,
 
     batch_size=256,  # the batch size of sample data, which is going to feed in the policy network
     # hidden_sizes=[128, 128],
@@ -44,7 +44,7 @@ config = dict(
     training_num=14,  # 用于训练的环境数目
     test_num=10,  # the number of episodes for one policy evaluation
 
-    logdir='/myspace/rainbow_v1.2',
+    logdir='/myspace/rainbow_v1.3',
     render=0.0,
 
     prioritized_replay=True,
@@ -57,9 +57,9 @@ config = dict(
 
     device='cuda' if torch.cuda.is_available() else 'cpu',
 
-    action_low=np.array([-pi / 4.0, -2]),
-    action_high=np.array([pi / 4.0,  2]),
-    action_per_dim=(11, 11),
+    action_low=np.array([-pi / 4.0, -0.88]),
+    action_high=np.array([pi / 4.0,  0.88]),
+    action_per_dim=(11, 3),
 
     network=dict(
         sur_dim=7,
