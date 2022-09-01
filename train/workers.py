@@ -13,7 +13,7 @@ from typing import List
 import gym
 import numpy as np
 import torch
-
+from config import CommonConfig
 from geek.env.logger import Logger
 from geek.env.matrix_env import Scenarios, DoneReason
 from train.tools import EnvPostProcsser
@@ -71,12 +71,22 @@ class EnvWorker(mp.Process):
         self.lock = lock
 
         self.env_post_processer = EnvPostProcsser()
+        self.env_action_space = CommonConfig.env_action_space
         torch.manual_seed(seed)
         np.random.seed(seed)
     
     @staticmethod
     def lmap(v: float, x: List, y: List) -> float:
         return y[0] + (v - x[0]) * (y[1] - y[0]) / (x[1] - x[0])
+
+    def action_transform(self, action) -> np.array :
+
+        low_action = self.env_action_space.low
+        high_action = self.env_action_space.high
+        steer = self.lmap(action[0],[-1.0, 1.0],[low_action[0], high_action[0]],)
+        acc = self.lmap(action[1], [-1.0, 1.0], [low_action[1], high_action[1]])
+
+        return np.array(steer, acc)
 
     def run(self):
         self.env = make_env(self.worker_index)
@@ -98,10 +108,9 @@ class EnvWorker(mp.Process):
                                 gaussian_action = gaussian_action.data.cpu().numpy()[0]
                                 env_state = env_state.data.cpu().numpy()[0]
                                 vec_state = vec_state.data.cpu().numpy()[0]
-                            # 线性映射到环境区间
-                            steer = self.lmap(action[0],[-1.0, 1.0],[-0.3925, 0.3925],)
-                            acc = self.lmap(action[1], [-1.0, 1.0], [-6.0, 2.0])
-                            obs, reward, done, info = self.env.step(np.array([steer, acc]))
+                            # 映射到环境动作
+                            env_action = self.action_transform(gaussian_action)
+                            obs, reward, done, info = self.env.step(env_action)
                             # 出现error则则放弃本帧的数据
                             if DoneReason.INFERENCE_DONE == info.get("DoneReason", ""):
                                 if len(episode) > 0:

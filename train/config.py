@@ -7,7 +7,10 @@ from dataclasses import dataclass, field
 from typing import List
 
 import torch
-
+import os 
+from pathlib import Path
+from gym.spaces import Box
+import numpy as np 
 
 @dataclass
 class PolicyParam:
@@ -66,3 +69,8 @@ class PolicyParam:
 
     target_speed = 30
     dt = 0.1
+
+class CommonConfig:
+
+    remote_path = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'gaussian_ppo_v1')
+    env_action_space = Box(low=np.array([-0.3925, -2.0]), high=np.array([0.3925, 2.0]), dtype=np.float32)

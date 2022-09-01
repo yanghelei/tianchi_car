@@ -14,7 +14,7 @@ import torch.optim as opt
 import sys 
 sys.path.append(os.path.split(os.path.dirname(os.path.abspath(__file__)))[0] + '/')
 from tensorboardX import SummaryWriter
-from train.config import PolicyParam
+from train.config import PolicyParam, CommonConfig
 from train.policy import PPOPolicy
 from train.workers import MemorySampler
 from geek.env.logger import Logger
@@ -301,25 +301,27 @@ class MulProPPO:
                     self.model.state_dict(), self.model_dir + "network.pth"
                 )
                 # 存储到云端
-                save_path = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace')
                 torch.save(
-                    self.model.state_dict(), save_path + "/network.pth"
+                    self.model.state_dict(), remote_path + "/network.pth"
                 )
-                self.logger.info(f'model has been successfully saved : {save_path}')
-                
+                self.logger.info(f'model has been successfully saved : {remote_path}')
+            
+            # 超时则提前结束训练   
             if (time.time() - self.start_time) > 9*3600:
                 break
+
         torch.save(
             self.model.state_dict(), self.model_dir + "network.pth"
         )
         # 存储到云端
-        save_path = str(Path(os.path.dirname(__file__)).resolve().parent.parent/ 'myspace')
         torch.save(
-                    self.model.state_dict(), save_path + "/network.pth"
+                    self.model.state_dict(), remote_path + "/network.pth"
                 )
         self.sampler.close()
 
 if __name__ == "__main__":
+    remote_path = CommonConfig.remote_path
+    os.mkdir(remote_path)
     # os.environ["OMP_NUM_THREADS"] = "1"  # Necessary for multithreading.
     torch.set_num_threads(1)
     mpp = MulProPPO(logger=logger)

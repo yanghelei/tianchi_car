@@ -43,7 +43,7 @@ def run(worker_index):
             action, _, _, _ = model.select_action(env_state, vec_state, True)
             action = action.data.cpu().numpy()[0]
             steer = EnvWorker.lmap(action[0],[-1.0, 1.0],[-0.3925, 0.3925],)
-            acc = EnvWorker.lmap(action[1], [-1.0, 1.0], [-6.0, 2.0])
+            acc = EnvWorker.lmap(action[1], [-1.0, 1.0], [-2.0, 2.0])
             obs, _, done, info = env.step(numpy.array([steer, acc]))
             infer_done = DoneReason.INFERENCE_DONE == info.get("DoneReason", "")
             if done and not infer_done:
