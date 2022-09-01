@@ -69,13 +69,12 @@ class PPOPolicy(nn.Module):
         self.policy_param = PolicyParam
         self.sur_feature_net = TimeVecFeatureNet(70, 5, 128)
         self.ego_feature_net = TimeVecFeatureNet(8, 5, 128)
+        self.feature_net = nn.Sequential(nn.Linear(256, 256), nn.ReLU())
         self.actor_net = nn.Sequential(
             OrderedDict(
                 [
                     ("actor_1", nn.Linear(256, 256)),
                     ("actor_relu_1", nn.ReLU()),
-                    ("actor_2", nn.Linear(256, 256)),
-                    ("actor_relu_2", nn.ReLU()),
                     ("actor_mu", nn.Linear(256, num_outputs)),
                 ]
             )
@@ -86,8 +85,6 @@ class PPOPolicy(nn.Module):
                 [
                     ("critic_1", nn.Linear(256, 256)),
                     ("critic_relu_1", nn.ReLU()),
-                    ("critic_2", nn.Linear(256, 256)),
-                    ("critic_relu2", nn.ReLU()),
                     ("critic_output", nn.Linear(256, 1)),
                 ]
             )
@@ -106,6 +103,7 @@ class PPOPolicy(nn.Module):
         ego_feature = self.ego_feature_net(ego_obs)
         sur_feature = self.sur_feature_net(sur_obs)
         env_feature = torch.concat([ego_feature, sur_feature], dim=1)
+        env_feature = self.feature_net(env_feature)
 
         return env_feature
 

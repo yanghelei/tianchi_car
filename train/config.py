@@ -21,15 +21,15 @@ class PolicyParam:
         num_workers = 1
         random_episode = 0
         num_episode = 20
-        batch_size = 256
-        minibatch_size = 100
+        batch_size = 600
+        minibatch_size = 600
         num_epoch = 3
     else:
         num_workers: int = 12
         random_episode: int = 20
         num_episode: int = 1000
         batch_size: int =  4196
-        minibatch_size: int = 1024
+        minibatch_size: int = 256
         num_epoch: int = 3
     save_num_episode: int = 10
     log_num_episode: int = 10
@@ -53,7 +53,7 @@ class PolicyParam:
     use_target_kl: bool = False
     advantage_norm: bool = True
     use_clipped_value_loss: bool = True
-    lossvalue_norm: bool = False
+    use_value_norm: bool = False
 
     reload = False
 

@@ -19,6 +19,7 @@ from train.workers import EnvWorker
 from pathlib import Path
 import argparse 
 import torch
+from train.config import CommonConfig
 # os.environ["OMP_NUM_THREADS"] = "1"  # Necessary for multithreading.
 torch.set_num_threads(1)
 model_dir = str(Path(os.path.dirname(__file__)) / 'results' / 'model')
@@ -27,11 +28,12 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--load_model', action="store_true", default=False)
 parser.add_argument('--num_workers', type=int, default=1)
 args = parser.parse_args()
-
+high_action = CommonConfig.env_action_space.high
+low_action = CommonConfig.env_action_space.low
 def run(worker_index):
     try:
         logger.info(f'worker {worker_index} starting')
-        env = gym.make("MatrixEnv-v1", scenarios=Scenarios.INFERENCE)
+        env = gym.make("MatrixEnv-v1", scenarios=Scenarios.INFERENCE, render_id=worker_index)
         obs = env.reset()
         model = PPOPolicy(2)
         env_post_processer = EnvPostProcsser()
@@ -42,8 +44,8 @@ def run(worker_index):
         while True:
             action, _, _, _ = model.select_action(env_state, vec_state, True)
             action = action.data.cpu().numpy()[0]
-            steer = EnvWorker.lmap(action[0],[-1.0, 1.0],[-0.3925, 0.3925],)
-            acc = EnvWorker.lmap(action[1], [-1.0, 1.0], [-2.0, 2.0])
+            steer = EnvWorker.lmap(action[0],[-1.0, 1.0],[low_action[0], high_action[0]],)
+            acc = EnvWorker.lmap(action[1], [-1.0, 1.0], [low_action[1], high_action[1]])
             obs, _, done, info = env.step(numpy.array([steer, acc]))
             infer_done = DoneReason.INFERENCE_DONE == info.get("DoneReason", "")
             if done and not infer_done:

@@ -13,7 +13,7 @@ from typing import List
 import gym
 import numpy as np
 import torch
-from config import CommonConfig
+from train.config import CommonConfig
 from geek.env.logger import Logger
 from geek.env.matrix_env import Scenarios, DoneReason
 from train.tools import EnvPostProcsser
@@ -86,7 +86,7 @@ class EnvWorker(mp.Process):
         steer = self.lmap(action[0],[-1.0, 1.0],[low_action[0], high_action[0]],)
         acc = self.lmap(action[1], [-1.0, 1.0], [low_action[1], high_action[1]])
 
-        return np.array(steer, acc)
+        return np.array([steer, acc])
 
     def run(self):
         self.env = make_env(self.worker_index)

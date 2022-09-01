@@ -249,28 +249,29 @@ class EnvPostProcsser:
         return ego_state
 
     def assemble_reward(self, observation: Dict, info: Dict) -> float:
-        if observation is None:
-            observation = self.pre_vec_obs
-            print(info) 
-        target_xy = (
-            (observation["player"]["target"][0] + observation["player"]["target"][4]) / 2,
-            (observation["player"]["target"][1] + observation["player"]["target"][5]) / 2,
-        )
-        curr_xy = (observation["player"]["status"][0], observation["player"]["status"][1])
-        distance_with_target = numpy.sqrt(
-            (target_xy[0] - curr_xy[0]) ** 2 + (target_xy[1] - curr_xy[1]) ** 2
-        )
+        try:
+            target_xy = (
+                (observation["player"]["target"][0] + observation["player"]["target"][4]) / 2,
+                (observation["player"]["target"][1] + observation["player"]["target"][5]) / 2,
+            )
+            curr_xy = (observation["player"]["status"][0], observation["player"]["status"][1])
+            distance_with_target = numpy.sqrt(
+                (target_xy[0] - curr_xy[0]) ** 2 + (target_xy[1] - curr_xy[1]) ** 2
+            )
+        except KeyError:
+            distance_with_target = self.prev_distance
+            print(info)
+            print(observation)
         if self.prev_distance is None:
             self.prev_distance = distance_with_target
-        distance_reward = (self.prev_distance - distance_with_target) / (
-            self.target_speed * self.dt
-        )
+        
+        distance_reward = (self.prev_distance - distance_with_target) * 0.5
         self.prev_distance = distance_with_target
-        step_reward = -0.5
+        step_reward = -0.1
 
-        if info["collided"]:
-            end_reward = -200
-        elif info["reached_stoparea"]:
+        # if info["collided"]:
+        #     end_reward = -200
+        if info["reached_stoparea"]:
             end_reward = 200
         elif info["timeout"]:
             end_reward = -200
@@ -289,8 +290,6 @@ class EnvPostProcsser:
         # 填充初始帧
         ego_vec_state = self.process_ego_vec_obs(initial_obs)
         sur_vec_state = self.process_surr_vec_obs(initial_obs)
-        ego_vec_state = np.clip(ego_vec_state, -5, 5)
-        sur_vec_state = np.clip(sur_vec_state, -5, 5)
         self.vec_deque = collections.deque(maxlen=5)
         self.surr_vec_deque = collections.deque(maxlen=5)
         for i in range(self.history_length):

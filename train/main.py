@@ -11,8 +11,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as opt
-import sys 
+import sys
 sys.path.append(os.path.split(os.path.dirname(os.path.abspath(__file__)))[0] + '/')
+from utils.norm import Normalization 
 from tensorboardX import SummaryWriter
 from train.config import PolicyParam, CommonConfig
 from train.policy import PPOPolicy
@@ -38,6 +39,8 @@ class MulProPPO:
         self.sampler = MemorySampler(self.args, self.logger)
         self.model = PPOPolicy(2).to(self.args.device)
         self.optimizer = opt.Adam(self.model.parameters(), lr=self.args.lr)
+        if self.args.use_value_norm:
+            self.value_norm = Normalization(1, device = self.args.device)
 
         self.clip_now = self.args.clip
         self.start_episode = 0
@@ -103,6 +106,7 @@ class MulProPPO:
         prev_advantage = 0
 
         for i in reversed(range(batch_size)):
+
             returns[i] = rewards[i] + self.args.gamma * prev_return * masks[i]
             deltas[i] = rewards[i] + self.args.gamma * prev_value * masks[i] - values[i]
             advantages[i] = (
@@ -112,6 +116,7 @@ class MulProPPO:
             prev_return = returns[i]
             prev_value = values[i]
             prev_advantage = advantages[i]
+
         if self.args.advantage_norm:
             advantages = (advantages - advantages.mean()) / (advantages.std() + self.args.EPS)
 
