@@ -59,7 +59,7 @@ config = dict(
 
     action_low=np.array([-pi / 4.0, -0.88]),
     action_high=np.array([pi / 4.0,  0.88]),
-    action_per_dim=(11, 3),
+    action_per_dim=(21, 3),
 
     network=dict(
         sur_dim=7,
