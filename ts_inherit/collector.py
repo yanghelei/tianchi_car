@@ -232,7 +232,7 @@ class MyCollector(Collector):
 
             self.data.obs = self.data.obs_next
 
-            if (n_step and step_count >= n_step) or (n_episode and episode_count >= n_episode):
+            if (n_step and step_count >= n_step and episode_count >= 14) or (n_episode and episode_count >= n_episode):
                 break
 
         # generate statistics
@@ -253,9 +253,9 @@ class MyCollector(Collector):
             rew_mean = rew_std = len_mean = len_std = 0
 
         if hasattr(self, 'train_logger'):
-            self.train_logger.info(f'Collector collected:{step_count}\tCost:{max(time.time() - start_time, 1e-9)}s')
+            self.train_logger.info(f'Collector collected: {episode_count} episodes with {step_count} transitions\tCost:{max(time.time() - start_time, 1e-9)}s')
         if hasattr(self, 'test_logger'):
-            self.test_logger.info(f'Reach goal rate:{reach_goal}/{episode_count} \tCollision rate:{collision}/{episode_count} \tTimeout rate:{time_out}/{episode_count}')
+            self.test_logger.info(f'Reach goal rate: {reach_goal}/{episode_count} \tCollision rate:{collision}/{episode_count} \tTimeout rate:{time_out}/{episode_count}')
 
         return {
             "n/ep": episode_count,
