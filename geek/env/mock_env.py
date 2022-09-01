@@ -9,7 +9,7 @@ from geek.env.matrix_env import DoneReason, MatrixEnv, Observations, Scenarios
 
 
 class MockEnv(MatrixEnv):
-    def __init__(self, scenarios: Scenarios) -> None:
+    def __init__(self, scenarios: Scenarios, render_id: int) -> None:
         if scenarios is None:
             raise TypeError("scenarios should not be none.")
 

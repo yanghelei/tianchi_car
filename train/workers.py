@@ -28,7 +28,7 @@ logger = Logger.get_logger(__name__)
 
 
 def make_env(render_id: str):
-    env = gym.make("MatrixEnv-v1", scenarios=Scenarios.TRAINING)
+    env = gym.make("MatrixEnv-v1", scenarios=Scenarios.TRAINING, render_id=str(render_id))
     return env
 
 

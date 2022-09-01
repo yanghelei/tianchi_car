@@ -143,7 +143,6 @@ class MulProPPO:
             minibatch_returns = returns[minibatch_ind]
             minibatch_newvalues = self.model.get_value(minibatch_env_state).flatten()
             assert minibatch_oldlogproba.shape == minibatch_newlogproba.shape
-            breakpoint()
             log_ratio = minibatch_newlogproba - minibatch_oldlogproba
             ratio = torch.exp(log_ratio)
             approx_kl = torch.mean((torch.exp(log_ratio) - 1) - log_ratio).item() # aprroximate the kl
@@ -321,7 +320,7 @@ class MulProPPO:
 
 if __name__ == "__main__":
     remote_path = CommonConfig.remote_path
-    os.mkdir(remote_path)
+    os.makedirs(remote_path, exist_ok=True)
     # os.environ["OMP_NUM_THREADS"] = "1"  # Necessary for multithreading.
     torch.set_num_threads(1)
     mpp = MulProPPO(logger=logger)

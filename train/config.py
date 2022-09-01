@@ -16,7 +16,7 @@ import numpy as np
 class PolicyParam:
     seed: int = 1234
 
-    debug = True
+    debug = False
     if debug:
         num_workers = 1
         random_episode = 0

@@ -52,12 +52,16 @@ class MatrixEnv(ABC, gym.Env):
     MatrixEnv 客户端
     """
 
-    def __init__(self, scenarios: Scenarios, scene_list: List[str]) -> None:
+    def __init__(self, 
+                 scenarios: Scenarios, 
+                 scene_list: List[str], 
+                 render_id: str) -> None:
         """
         Args:
             scenarios: Scenarios 训练模式使用Scenarios.TRAINING
                                  评估模式使用Scenarios.INFERENCE
             scene_list: List[str] 指定训练场景列表, 默认使用所有场景, 仅在训练模式生效
+            render_id: 实例的实时回放id
         """
 
         self.action_space = spaces.Box(low=-6.0, high=2.0, shape=(2,))
