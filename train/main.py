@@ -101,21 +101,23 @@ class MulProPPO:
         returns = torch.Tensor(batch_size)
         deltas = torch.Tensor(batch_size)
         advantages = torch.Tensor(batch_size)
-        prev_return = 0
-        prev_value = 0
-        prev_advantage = 0
+        prev_advantage = torch.Tensor([0])
+        prev_value = torch.Tensor([0])
 
         for i in reversed(range(batch_size)):
+            if self.args.use_value_norm:
+                deltas[i] = rewards[i] + self.args.gamma*self.value_norm.denormalize(prev_value) \
+                            *masks[i] - self.value_norm.denormalize(values[i])
+                advantages[i] = deltas[i] + self.args.gamma * self.args.lamda * prev_advantage * masks[i]
+                returns[i] = advantages[i] + self.value_norm.denormalize(values[i]) # TD-lamda return
+            else: 
+                deltas[i] = rewards[i] + self.args.gamma*prev_value \
+                            *masks[i] - values[i]
+                advantages[i] = deltas[i] + self.args.gamma * self.args.lamda * prev_advantage * masks[i]
+                returns[i] = advantages[i] + values[i]
 
-            returns[i] = rewards[i] + self.args.gamma * prev_return * masks[i]
-            deltas[i] = rewards[i] + self.args.gamma * prev_value * masks[i] - values[i]
-            advantages[i] = (
-                deltas[i] + self.args.gamma * self.args.lamda * prev_advantage * masks[i]
-            )
-
-            prev_return = returns[i]
-            prev_value = values[i]
             prev_advantage = advantages[i]
+            prev_value = values[i]
 
         if self.args.advantage_norm:
             advantages = (advantages - advantages.mean()) / (advantages.std() + self.args.EPS)
@@ -128,6 +130,8 @@ class MulProPPO:
         oldlogproba = oldlogproba.to(self.args.device)
         advantages = advantages.to(self.args.device)
         returns = returns.to(self.args.device)
+        if self.args.use_value_norm:
+            self.value_norm.update(returns)
         for i_epoch in range(int(self.args.num_epoch * batch_size / self.args.minibatch_size)):
             minibatch_ind = np.random.choice(
                 batch_size, self.args.minibatch_size, replace=False
@@ -156,27 +160,23 @@ class MulProPPO:
             surr2 = ratio.clamp(1 - self.clip_now, 1 + self.clip_now) * minibatch_advantages
             loss_surr = -torch.mean(torch.min(surr1, surr2))
 
-            # clip value (防止value变化过快)
-            if self.args.use_clipped_value_loss:
-                value_pred_clipped = minibatch_values + (
-                    minibatch_newvalues - minibatch_values
-                ).clamp(-self.args.vf_clip_param, self.args.vf_clip_param)
+            value_pred_clipped = minibatch_values + (
+                minibatch_newvalues - minibatch_values
+            ).clamp(-self.args.vf_clip_param, self.args.vf_clip_param)
+
+            if self.args.use_value_norm:
+                value_losses = 0.5*(minibatch_newvalues - self.value_norm.normalize(minibatch_returns)).pow(2)
+                value_loss_clip = 0.5*(value_pred_clipped - self.value_norm.normalize(minibatch_returns)).pow(2)
+                loss_value = torch.max(value_losses, value_loss_clip).mean()
+            else:
                 value_losses = 0.5*(minibatch_newvalues - minibatch_returns).pow(2)
                 value_loss_clip = 0.5*(value_pred_clipped - minibatch_returns).pow(2)
+
+            if self.args.use_clipped_value_loss:
                 loss_value = torch.max(value_losses, value_loss_clip).mean()
             else:
                 loss_value = torch.mean((minibatch_newvalues - minibatch_returns).pow(2))
 
-            # value normalization is not clear 
-            # if self.args.lossvalue_norm:
-            #     minibatch_return_6std = 6 * minibatch_returns.std()
-            #     loss_value = (
-            #         torch.mean((minibatch_newvalues - minibatch_returns).pow(2))
-            #         / minibatch_return_6std
-            #     )
-            # else:
-            #     loss_value = torch.mean((minibatch_newvalues - minibatch_returns).pow(2))
-            
             total_loss = (
                 loss_surr
                 + self.args.loss_coeff_value * loss_value
@@ -188,10 +188,11 @@ class MulProPPO:
             self.optimizer.zero_grad()
             total_loss.backward()
             nn.utils.clip_grad_norm_(self.model.parameters(), self.args.max_grad_norm)
-            self.optimizer.step()
+            # before training , rollout out some random episode to initiate
+            if episode >= self.args.random_episode:
+                self.optimizer.step()
 
         # update normalization 
-        
         self.model.update_norm(sur_obs.view(-1, sur_obs.shape[-1]), vec_obs.view(-1, vec_obs.shape[-1]))
         return total_loss, loss_surr, loss_value, loss_entropy, rewards
 
@@ -251,9 +252,6 @@ class MulProPPO:
             batch = memory.sample()
             batch_size = len(memory)
             self.global_sample_size += batch_size
-            # before training , rollout out some random episode to initiate
-            if i_episode < self.args.random_episode:
-                continue
             # update policy
             total_loss, loss_surr, loss_value, loss_entropy, rewards = self.update(batch, i_episode, batch_size)
             # schedule lr and clip

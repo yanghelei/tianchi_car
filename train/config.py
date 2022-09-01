@@ -53,7 +53,7 @@ class PolicyParam:
     use_target_kl: bool = False
     advantage_norm: bool = True
     use_clipped_value_loss: bool = True
-    use_value_norm: bool = False
+    use_value_norm: bool = True
 
     reload = False
 
