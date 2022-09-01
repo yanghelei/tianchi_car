@@ -24,7 +24,7 @@ from utils.processors import set_seed, Processor
 
 def make_train_env(cfgs, render_id=None):
     if render_id is not None:
-        # env = gym.make(cfgs.task, scenarios=Scenarios.TRAINING, render_id=str(render_id))
+        # env = gym.make(cfgs.task, scenarios=Scenarios.TRAINING)
         env = gym.make(cfgs.task, scenarios=Scenarios.TRAINING, render_id=str(render_id))
     else:
         env = gym.make(cfgs.task, scenarios=Scenarios.TRAINING)
@@ -41,8 +41,8 @@ def make_test_env(cfgs):
 
 
 def train(cfgs):
-    train_envs = SubprocVectorEnv([lambda: make_train_env(cfgs, i) for i in range(cfgs.training_num)])
-    test_envs = DummyVectorEnv([lambda: make_train_env(cfgs) for _ in range(15-cfgs.training_num)])
+    train_envs = SubprocVectorEnv([lambda i=_i: make_train_env(cfgs, i) for _i in range(cfgs.training_num)])
+    test_envs = DummyVectorEnv([lambda i=_i: make_train_env(cfgs, 'test_'+str(i)) for _i in range(15-cfgs.training_num)])
 
     set_seed(seed=cfgs.seed)
 
@@ -98,7 +98,7 @@ def train(cfgs):
     # policy logger
     policy.set_logger(logger.logger)
 
-    train_collector.collect(n_step=cfgs.batch_size * cfgs.training_num, random=True)
+    # train_collector.collect(n_step=cfgs.training_num * 1000, random=False)
 
     def save_best_fn(policy):
         # 保存最优模型

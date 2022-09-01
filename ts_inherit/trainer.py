@@ -23,9 +23,9 @@ class MyTrainer(OffpolicyTrainer):
             losses = self.policy.update(self.batch_size, self.train_collector.buffer)
             loss += losses['loss']
             self.log_update_data(data, losses)
-        loss = loss / update_num
-        end_time = time.time()
-        self.logger.logger.info(f'During {update_num} time policy learning, Mean loss is {loss}, Cost:{end_time-start_time}s!')
+        loss = round(loss / update_num, 5)
+        cost_time = round(time.time() - start_time, 2)
+        self.logger.logger.info(f'After {update_num} time policy learning, Mean loss is {loss}, Cost:{cost_time}s')
 
     def reset(self) -> None:
         """ Initialize or reset the instance to yield a new iterator from zero. """
