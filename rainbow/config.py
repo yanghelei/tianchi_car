@@ -31,7 +31,7 @@ config = dict(
 
     noisy_std=0.1,
     n_step=5,  # the number of steps to look ahead. Default to 1.
-    target_update_freq=2.8e3,  # v1.2 origin:2e4 take about 3h to update once policy
+    target_update_freq=1.4e3,  # v1.2: 2e4  v1.3: 2.8e3     v1.4: 1.4e3
 
     epoch=1e7,
     step_per_epoch=1.4e4,  # the number of transitions collected per epoch
@@ -44,7 +44,7 @@ config = dict(
     training_num=14,  # 用于训练的环境数目
     test_num=10,  # the number of episodes for one policy evaluation
 
-    logdir='/myspace/rainbow_v1.3',
+    logdir='/myspace/rainbow_v1.4',
     render=0.0,
 
     prioritized_replay=True,

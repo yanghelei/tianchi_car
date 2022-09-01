@@ -25,7 +25,7 @@ from utils.processors import set_seed, Processor
 def make_train_env(cfgs, render_id=None):
     if render_id is not None:
         # env = gym.make(cfgs.task, scenarios=Scenarios.TRAINING, render_id=str(render_id))
-        env = gym.make(cfgs.task, scenarios=Scenarios.TRAINING)
+        env = gym.make(cfgs.task, scenarios=Scenarios.TRAINING, render_id=str(render_id))
     else:
         env = gym.make(cfgs.task, scenarios=Scenarios.TRAINING)
     if not hasattr(env, 'action_space'):
@@ -87,7 +87,7 @@ def train(cfgs):
     logger.logger.info('device: ' + str(cfgs.device))
 
     train_processor = Processor(cfgs, net, logger.logger, n_env=cfgs.training_num)
-    test_processor = Processor(cfgs, net, logger.logger, n_env=15-cfgs.training_num)
+    test_processor = Processor(cfgs, net, logger.logger, n_env=15-cfgs.training_num, update_norm=False)
 
     # collector
     train_collector = MyCollector(policy, train_envs, buf, preprocess_fn=train_processor.preprocess_fn, exploration_noise=True)
