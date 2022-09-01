@@ -2,6 +2,7 @@ from typing import Any, Dict, Tuple, Union
 
 import tqdm
 import time
+from math import inf
 
 from tianshou.trainer.utils import gather_info
 from tianshou.utils import DummyTqdm, tqdm_config
@@ -34,6 +35,8 @@ class MyTrainer(OffpolicyTrainer):
         if self.resume_from_log:
             self.start_epoch, self.env_step, self.gradient_step = self.logger.restore_data()
             self.best_epoch, self.best_reward, self.best_reward_std = self.logger.restore_best()
+            if self.best_reward > -inf:
+                self.logger.logger.info(f'Resume: Epoch #{self.best_epoch}: best_reward: {self.best_reward:.6f} ± {self.best_reward_std:.6f}.')
 
         self.last_rew, self.last_len = 0.0, 0
         self.start_time = time.time()

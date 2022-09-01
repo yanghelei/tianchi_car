@@ -23,8 +23,9 @@ from utils.processors import set_seed, Processor
 
 
 def make_train_env(cfgs, render_id=None):
-    if render_id:
-        env = gym.make(cfgs.task, scenarios=Scenarios.TRAINING, render_id=str(render_id))
+    if render_id is not None:
+        # env = gym.make(cfgs.task, scenarios=Scenarios.TRAINING, render_id=str(render_id))
+        env = gym.make(cfgs.task, scenarios=Scenarios.TRAINING)
     else:
         env = gym.make(cfgs.task, scenarios=Scenarios.TRAINING)
     if not hasattr(env, 'action_space'):
