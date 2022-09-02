@@ -111,16 +111,12 @@ class EnvWorker(mp.Process):
                             # 映射到环境动作
                             env_action = self.action_transform(gaussian_action)
                             obs, reward, done, info = self.env.step(env_action)
-                            # 出现error则则放弃本帧的数据
+                            # 出现error则则放弃本回合的数据
                             if DoneReason.INFERENCE_DONE == info.get("DoneReason", ""):
-                                if len(episode) > 0:
-                                    with self.lock:
-                                        self.queue.put(episode)
                                 break
                             elif DoneReason.Runtime_Error == info.get("DoneReason", ""):
-                                if len(episode) > 0:
-                                    with self.lock:
-                                        self.queue.put(episode)
+                                break
+                            elif True == info.get('RuntimeError', ""):
                                 break
                             if not done:
                                 new_env_state = self.env_post_processer.assemble_surr_vec_obs(obs)

@@ -22,7 +22,7 @@ import torch
 from train.config import CommonConfig
 # os.environ["OMP_NUM_THREADS"] = "1"  # Necessary for multithreading.
 torch.set_num_threads(1)
-model_dir = str(Path(os.path.dirname(__file__)) / 'results' / 'model')
+model_dir = CommonConfig.remote_path
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--load_model', action="store_true", default=False)
@@ -48,6 +48,8 @@ def run(worker_index):
             acc = EnvWorker.lmap(action[1], [-1.0, 1.0], [low_action[1], high_action[1]])
             obs, _, done, info = env.step(numpy.array([steer, acc]))
             infer_done = DoneReason.INFERENCE_DONE == info.get("DoneReason", "")
+            if done:
+                print(info)
             if done and not infer_done:
                 obs = env.reset()
                 env_post_processer.reset(obs)
