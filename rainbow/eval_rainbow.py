@@ -33,7 +33,6 @@ name = 'checkpoint.pth'
 
 
 def load_policy(cfgs, name):
-    cfgs.device = 'cpu'
 
     def noisy_linear(x, y):
         return NoisyLinear(x, y, cfgs.noisy_std)
@@ -92,6 +91,8 @@ env = gym.make(
 obs = env.reset()
 policy = load_policy(cfg, name)
 
+count = 1
+logger.info('Start Inference 1!')
 while True:
     data = get_observation_for_test(cfg=cfg, obs=obs)
     result = policy(data)
@@ -101,5 +102,7 @@ while True:
     infer_done = DoneReason.INFERENCE_DONE == info.get("DoneReason", "")
     if done and not infer_done:
         obs = env.reset()
+        count += 1
+        logger.info(f'Start Inference {count}!')
     elif infer_done:
         break
