@@ -16,6 +16,8 @@ from utils.processors import Processor
 
 logger = Logger.get_logger(__name__)
 
+torch.set_num_threads(1)
+
 from utils.processors import get_observation_for_test
 from ts_inherit.utils import to_torch_as, to_numpy
 from ts_inherit.networks import MyActor
@@ -97,7 +99,9 @@ def run(worker_index):
 
 
 if __name__ == "__main__":
-    num_workers = 12
+    torch.multiprocessing.set_start_method('spawn')
+
+    num_workers = 1
 
     pool = Pool(num_workers)
     pool_result = pool.map_async(run, list(range(num_workers)))
