@@ -16,7 +16,7 @@ from utils.processors import Processor
 
 logger = Logger.get_logger(__name__)
 
-# torch.set_num_threads(1)
+torch.set_num_threads(1)
 
 from utils.processors import get_observation_for_test
 from ts_inherit.utils import to_torch_as, to_numpy
@@ -33,8 +33,6 @@ name = 'checkpoint.pth'
 
 
 def load_policy(cfgs, name):
-
-    cfgs.device = 'cpu'
 
     def noisy_linear(x, y):
         return NoisyLinear(x, y, cfgs.noisy_std)
@@ -105,7 +103,9 @@ def run(worker_index):
 
 
 if __name__ == "__main__":
-    num_workers = 1
+    torch.multiprocessing.set_start_method('spawn')
+
+    num_workers = 12
 
     pool = Pool(num_workers)
     pool_result = pool.map_async(run, list(range(num_workers)))
