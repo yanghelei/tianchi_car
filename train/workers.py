@@ -114,8 +114,6 @@ class EnvWorker(mp.Process):
                             # 出现error则则放弃本回合的数据
                             if DoneReason.INFERENCE_DONE == info.get("DoneReason", ""):
                                 break
-                            elif DoneReason.Runtime_Error == info.get("DoneReason", ""):
-                                break
                             elif True == info.get('RuntimeError', ""):
                                 break
                             if not done:
