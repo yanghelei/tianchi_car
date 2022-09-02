@@ -88,9 +88,10 @@ def run(worker_index):
         obs = env.reset()
         policy = load_policy(cfg, name)
         while True:
-            obs = get_observation_for_test(cfg=cfg, obs=obs)
-            result = policy(obs)
-            act = policy.map_action(to_numpy(result.act))[0]
+            data = get_observation_for_test(cfg=cfg, obs=obs)
+            result = policy(data)
+            data.update(act=result.act)
+            act = policy.map_action(data)[0]
             obs, reward, done, info = env.step(act)
             infer_done = DoneReason.INFERENCE_DONE == info.get("DoneReason", "")
             if done and not infer_done:
@@ -104,7 +105,7 @@ def run(worker_index):
 if __name__ == "__main__":
     torch.multiprocessing.set_start_method('spawn')
 
-    num_workers = 12
+    num_workers = 1
 
     pool = Pool(num_workers)
     pool_result = pool.map_async(run, list(range(num_workers)))
