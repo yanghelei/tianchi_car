@@ -65,8 +65,10 @@ def load_policy(cfgs, name):
 
     log_path = os.path.join(cfgs.logdir, cfgs.task, "rainbow")
 
-    logger.info(f"Loading agent under {log_path}")
     ckpt_path = os.path.join(log_path, name)
+
+    logger.info(f"Loading agent under {ckpt_path}")
+
     if os.path.exists(ckpt_path):
         if name == 'best_policy.pth':
             best_policy = torch.load(ckpt_path, map_location=cfgs.device)
