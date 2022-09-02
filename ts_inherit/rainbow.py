@@ -1,4 +1,5 @@
 import itertools
+from math import pi
 import numpy as np
 from tianshou.policy import RainbowPolicy
 
@@ -8,8 +9,12 @@ from rainbow.config import cfg
 class MyRainbow(RainbowPolicy):
 
     def make_action_library(self, cfgs):
-        mesh = [np.linspace(lo, hi, a) for lo, hi, a in zip(cfgs.action_low, cfgs.action_high, cfgs.action_per_dim)]
-        self.action_library = list(itertools.product(*mesh))
+        steer_prime_choices = cfgs.steer_prime_choices
+        acc_prime_choice = cfgs.acc_prime_choice
+        self.action_library = list(itertools.product(steer_prime_choices, acc_prime_choice))
+
+        # mesh = [np.linspace(lo, hi, a) for lo, hi, a in zip(cfgs.action_low, cfgs.action_high, cfgs.action_per_dim)]
+        # self.action_library = list(itertools.product(*mesh))
 
     def map_action(self, data):
         """Map raw network output to action range in gym's env.action_space.
@@ -39,8 +44,9 @@ class MyRainbow(RainbowPolicy):
             action = list()
             for _idx in range(len(act)):
                 _act = act[_idx]
-                _steer, _jerk = self.action_library[_act]
-                _acc = np.clip(obs[_idx][0][4] + _jerk * cfg.dt, -2.0, 2.0)
+                _steer_prime, _acc_prime = self.action_library[_act]
+                _steer = np.clip(obs[_idx][0][5] + _steer_prime * cfg.dt, -pi/8.0, pi/8.0)
+                _acc = np.clip(obs[_idx][0][6] + _acc_prime * cfg.dt, -2.0, 2.0)
                 action.append([_steer, _acc])
             return np.array(action, dtype=np.float32)
         # if len(data.act.shape) == 1:
@@ -55,4 +61,10 @@ class MyRainbow(RainbowPolicy):
     def set_logger(self, logger):
         if not hasattr(self, 'logger'):
             setattr(self, 'logger', logger)
+
+
+if __name__ == '__main__':
+    a = np.linspace(-1, 1, 3)
+    print(a)
+
 
