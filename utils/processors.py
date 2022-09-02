@@ -21,8 +21,8 @@ def get_observation_for_test(cfg, obs):
     curr_velocity = obs["player"]["status"][3]  # 当前车辆后轴中心纵向速度
     # curr_acc = obs["player"]["status"][4]  # 当前车辆后轴中心纵向加速度
     curr_lateral_acc = obs["player"]["status"][5]  # 当前车辆后轴中心横向加速度
-    # curr_steer = obs["player"]["status"][6]  # 当前前轮转角
-    prev_steer = obs["player"]["status"][7]  # 上一个前轮转角命令
+    curr_steer = obs["player"]["status"][6]  # 当前前轮转角
+    # prev_steer = obs["player"]["status"][7]  # 上一个前轮转角命令
     prev_acc = obs["player"]["status"][8]  # 上一个加速度命令
     lane_list = []
 
@@ -47,7 +47,7 @@ def get_observation_for_test(cfg, obs):
             curr_yaw,  # 当前车辆的朝向角
             curr_velocity,  # 车辆后轴当前纵向速度
             curr_lateral_acc,  # 车辆当前后轴横向加速度
-            prev_steer,  # 上一个前轮转角命令(车辆当前前轮转角)
+            curr_steer,  # 上一个前轮转角命令×(车辆当前前轮转角√)
             prev_acc,  # 上一个加速度命令(车辆当前后轴纵向加速度)
             current_lane_index,  # 当前所处车道的id
             speed_limit - curr_velocity,  # 当前车道速度上限与当前车速的差值
@@ -145,13 +145,13 @@ class Processor:
         curr_acc = observation["player"]["status"][4]  # 当前车辆后轴中心纵向加速度
         curr_lateral_acc = observation["player"]["status"][5]  # 当前车辆后轴中心横向加速度
         curr_steer = observation["player"]["status"][6]  # 当前前轮转角
-        prev_steer = observation["player"]["status"][7]  # 上一个前轮转角命令
+        # prev_steer = observation["player"]["status"][7]  # 上一个前轮转角命令
         prev_acc = observation["player"]["status"][8]  # 上一个加速度命令
 
         if prev_acc != curr_acc:
             self.logger.info(f'Now forward acc is {curr_acc}, last action acc is {prev_acc}!')
-        if prev_steer != curr_steer:
-            self.logger.info(f'Now steer is {curr_steer}, last action steer is {prev_steer}!')
+        # if prev_steer != curr_steer:
+        #     self.logger.info(f'Now steer is {curr_steer}, last action steer is {prev_steer}!')
 
         lane_list = []
 
@@ -176,7 +176,7 @@ class Processor:
                 curr_yaw,  # 当前车辆的朝向角
                 curr_velocity,  # 车辆后轴当前纵向速度
                 curr_lateral_acc,  # 车辆当前后轴横向加速度
-                prev_steer,  # 上一个前轮转角命令(车辆当前前轮转角)
+                curr_steer,  # 上一个前轮转角命令×(车辆当前前轮转角√)
                 prev_acc,  # 上一个加速度命令(车辆当前后轴纵向加速度)
                 current_lane_index,  # 当前所处车道的id
                 speed_limit - curr_velocity,  # 当前车道速度上限与当前车速的差值
