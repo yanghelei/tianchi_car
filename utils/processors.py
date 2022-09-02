@@ -9,48 +9,19 @@ from utils.math import compute_distance
 
 
 def get_observation_for_test(cfg, obs):
-    curr_xy = (obs["player"]["status"][0], obs["player"]["status"][1])  # 车辆后轴中心位置
-    npc_info_dict = {}
-
-    for npc_info in obs["npcs"]:
-        if int(npc_info[0]) == 0:
-            continue
-        npc_info_dict[np.sqrt((npc_info[2] - curr_xy[0]) ** 2 + (npc_info[3] - curr_xy[1]) ** 2)] = [
-            npc_info[2] - curr_xy[0],  # dx
-            npc_info[3] - curr_xy[1],  # dy
-            npc_info[4],  # 障碍物朝向
-            np.sqrt(npc_info[5] ** 2 + npc_info[6] ** 2) - obs["player"]["status"][3],  # 障碍物速度大小（标量） - 当前车速度大小
-            np.sqrt(npc_info[7] ** 2 + npc_info[8] ** 2),  # 障碍物加速度大小（标量）
-            npc_info[9],  # 障碍物宽度
-            npc_info[10],  # 障碍物长度
-        ]
-    if len(npc_info_dict) == 0:
-        sur_obs_list = np.zeros((cfg.max_consider_nps, cfg.network.sur_dim))
-        n_sur = 1
-    else:
-        # 按距离由近至远排列
-        sorted_npc_info_dict = dict(sorted(npc_info_dict.items(), key=lambda x: x[0]))
-        sur_obs_list = list(sorted_npc_info_dict.values())
-        n_sur = len(sur_obs_list)
-        for _ in range(cfg.max_consider_nps - n_sur):
-            sur_obs_list.append(list(np.zeros(cfg.network.sur_dim)))
-        sur_obs_list = np.array(sur_obs_list)[:cfg.max_consider_nps, :]
-
-    # sur_obs_list = list(sorted_npc_info_dict.values())
-    # # 若数量不足 surr_number 则补齐
-    # for _ in range(cfg.surr_number - len(sur_obs_list)):
-    #     sur_obs_list.append(list(np.zeros(cfg.surr_vec_length)))
-    # # 截断
-    # curr_surr_obs = np.array(sur_obs_list).reshape(-1)[: cfg.surr_number * 7]
+    curr_xy = (obs["player"]["status"][0], obs["player"]["status"][1])  # 当前车辆位置
 
     target_xy = (
         (obs["player"]["target"][0] + obs["player"]["target"][4]) / 2,  # 目标区域中心位置x
         (obs["player"]["target"][1] + obs["player"]["target"][5]) / 2,  # 目标区域中心位置y
     )
-    curr_xy = (obs["player"]["status"][0], obs["player"]["status"][1])  # 当前车辆位置
+
     delta_xy = (target_xy[0] - curr_xy[0], target_xy[1] - curr_xy[1])  # 目标区域与当前位置的绝对偏差
     curr_yaw = obs["player"]["status"][2]  # 当前朝向
     curr_velocity = obs["player"]["status"][3]  # 当前车辆后轴中心纵向速度
+    # curr_acc = obs["player"]["status"][4]  # 当前车辆后轴中心纵向加速度
+    curr_lateral_acc = obs["player"]["status"][5]  # 当前车辆后轴中心横向加速度
+    # curr_steer = obs["player"]["status"][6]  # 当前前轮转角
     prev_steer = obs["player"]["status"][7]  # 上一个前轮转角命令
     prev_acc = obs["player"]["status"][8]  # 上一个加速度命令
     lane_list = []
@@ -75,13 +46,41 @@ def get_observation_for_test(cfg, obs):
             delta_xy[1],  # 目标区域与当前位置的偏差y
             curr_yaw,  # 当前车辆的朝向角
             curr_velocity,  # 车辆后轴当前纵向速度
-            prev_steer,  # 上一个前轮转角命令
-            prev_acc,  # 上一个加速度命令
+            curr_lateral_acc,  # 车辆当前后轴横向加速度
+            prev_steer,  # 上一个前轮转角命令(车辆当前前轮转角)
+            prev_acc,  # 上一个加速度命令(车辆当前后轴纵向加速度)
             current_lane_index,  # 当前所处车道的id
             speed_limit - curr_velocity,  # 当前车道速度上限与当前车速的差值
             current_offset,  # 车道的偏移量
         ]]
     )
+
+    curr_xy = (obs["player"]["status"][0], obs["player"]["status"][1])  # 车辆后轴中心位置
+    npc_info_dict = {}
+
+    for npc_info in obs["npcs"]:
+        if int(npc_info[0]) == 0:
+            continue
+        npc_info_dict[np.sqrt((npc_info[2] - curr_xy[0]) ** 2 + (npc_info[3] - curr_xy[1]) ** 2)] = [
+            npc_info[2] - curr_xy[0],  # dx
+            npc_info[3] - curr_xy[1],  # dy
+            npc_info[4] - curr_yaw,  # 障碍物朝向 - 当前车的朝向
+            np.sqrt(npc_info[5] ** 2 + npc_info[6] ** 2) - obs["player"]["status"][3],  # 障碍物速度大小（标量） - 当前车速度大小
+            np.sqrt(npc_info[7] ** 2 + npc_info[8] ** 2) - prev_acc,  # 障碍物加速度大小（标量） - 当前车加速度大小
+            npc_info[9],  # 障碍物宽度
+            npc_info[10],  # 障碍物长度
+        ]
+    if len(npc_info_dict) == 0:
+        sur_obs_list = np.zeros((cfg.max_consider_nps, cfg.sur_dim))
+        n_sur = 1
+    else:
+        # 按距离由近至远排列
+        sorted_npc_info_dict = dict(sorted(npc_info_dict.items(), key=lambda x: x[0]))
+        sur_obs_list = list(sorted_npc_info_dict.values())
+        n_sur = len(sur_obs_list)
+        for _ in range(cfg.max_consider_nps - n_sur):
+            sur_obs_list.append(list(np.zeros(cfg.sur_dim)))
+        sur_obs_list = np.array(sur_obs_list)[:cfg.max_consider_nps, :]
 
     obs = dict(
         sur_obs=dict(
@@ -133,48 +132,19 @@ class Processor:
     # return sur_state
 
     def get_observation(self, observation, env_id=None):
-        curr_xy = (observation["player"]["status"][0], observation["player"]["status"][1])  # 车辆后轴中心位置
-        npc_info_dict = {}
-
-        for npc_info in observation["npcs"]:
-            if int(npc_info[0]) == 0:
-                continue
-            npc_info_dict[np.sqrt((npc_info[2] - curr_xy[0]) ** 2 + (npc_info[3] - curr_xy[1]) ** 2)] = [
-                npc_info[2] - curr_xy[0],  # dx
-                npc_info[3] - curr_xy[1],  # dy
-                npc_info[4],  # 障碍物朝向
-                np.sqrt(npc_info[5] ** 2 + npc_info[6] ** 2) - observation["player"]["status"][3],  # 障碍物速度大小（标量） - 当前车速度大小
-                np.sqrt(npc_info[7] ** 2 + npc_info[8] ** 2),  # 障碍物加速度大小（标量）
-                npc_info[9],  # 障碍物宽度
-                npc_info[10],  # 障碍物长度
-            ]
-        if len(npc_info_dict) == 0:
-            sur_obs_list = np.zeros((self.max_consider_nps, self.sur_dim))
-            n_sur = 1
-        else:
-            # 按距离由近至远排列
-            sorted_npc_info_dict = dict(sorted(npc_info_dict.items(), key=lambda x: x[0]))
-            sur_obs_list = list(sorted_npc_info_dict.values())
-            n_sur = len(sur_obs_list)
-            for _ in range(self.max_consider_nps - n_sur):
-                sur_obs_list.append(list(np.zeros(self.sur_dim)))
-            sur_obs_list = np.array(sur_obs_list)[:self.max_consider_nps, :]
-
-        # sur_obs_list = list(sorted_npc_info_dict.values())
-        # # 若数量不足 surr_number 则补齐
-        # for _ in range(cfg.surr_number - len(sur_obs_list)):
-        #     sur_obs_list.append(list(np.zeros(cfg.surr_vec_length)))
-        # # 截断
-        # curr_surr_obs = np.array(sur_obs_list).reshape(-1)[: cfg.surr_number * 7]
+        curr_xy = (observation["player"]["status"][0], observation["player"]["status"][1])  # 当前车辆位置
 
         target_xy = (
             (observation["player"]["target"][0] + observation["player"]["target"][4]) / 2,  # 目标区域中心位置x
             (observation["player"]["target"][1] + observation["player"]["target"][5]) / 2,  # 目标区域中心位置y
         )
-        curr_xy = (observation["player"]["status"][0], observation["player"]["status"][1])  # 当前车辆位置
+
         delta_xy = (target_xy[0] - curr_xy[0], target_xy[1] - curr_xy[1])  # 目标区域与当前位置的绝对偏差
         curr_yaw = observation["player"]["status"][2]  # 当前朝向
         curr_velocity = observation["player"]["status"][3]  # 当前车辆后轴中心纵向速度
+        # curr_acc = observation["player"]["status"][4]  # 当前车辆后轴中心纵向加速度
+        curr_lateral_acc = observation["player"]["status"][5]  # 当前车辆后轴中心横向加速度
+        # curr_steer = observation["player"]["status"][6]  # 当前前轮转角
         prev_steer = observation["player"]["status"][7]  # 上一个前轮转角命令
         prev_acc = observation["player"]["status"][8]  # 上一个加速度命令
         lane_list = []
@@ -199,13 +169,41 @@ class Processor:
                 delta_xy[1],  # 目标区域与当前位置的偏差y
                 curr_yaw,  # 当前车辆的朝向角
                 curr_velocity,  # 车辆后轴当前纵向速度
-                prev_steer,  # 上一个前轮转角命令
-                prev_acc,  # 上一个加速度命令
+                curr_lateral_acc,  # 车辆当前后轴横向加速度
+                prev_steer,  # 上一个前轮转角命令(车辆当前前轮转角)
+                prev_acc,  # 上一个加速度命令(车辆当前后轴纵向加速度)
                 current_lane_index,  # 当前所处车道的id
                 speed_limit - curr_velocity,  # 当前车道速度上限与当前车速的差值
                 current_offset,  # 车道的偏移量
             ]]
         )
+
+        curr_xy = (observation["player"]["status"][0], observation["player"]["status"][1])  # 车辆后轴中心位置
+        npc_info_dict = {}
+
+        for npc_info in observation["npcs"]:
+            if int(npc_info[0]) == 0:
+                continue
+            npc_info_dict[np.sqrt((npc_info[2] - curr_xy[0]) ** 2 + (npc_info[3] - curr_xy[1]) ** 2)] = [
+                npc_info[2] - curr_xy[0],  # dx
+                npc_info[3] - curr_xy[1],  # dy
+                npc_info[4] - curr_yaw,  # 障碍物朝向 - 当前车的朝向
+                np.sqrt(npc_info[5] ** 2 + npc_info[6] ** 2) - observation["player"]["status"][3],  # 障碍物速度大小（标量） - 当前车速度大小
+                np.sqrt(npc_info[7] ** 2 + npc_info[8] ** 2) - prev_acc,  # 障碍物加速度大小（标量） - 当前车加速度大小
+                npc_info[9],  # 障碍物宽度
+                npc_info[10],  # 障碍物长度
+            ]
+        if len(npc_info_dict) == 0:
+            sur_obs_list = np.zeros((self.max_consider_nps, self.sur_dim))
+            n_sur = 1
+        else:
+            # 按距离由近至远排列
+            sorted_npc_info_dict = dict(sorted(npc_info_dict.items(), key=lambda x: x[0]))
+            sur_obs_list = list(sorted_npc_info_dict.values())
+            n_sur = len(sur_obs_list)
+            for _ in range(self.max_consider_nps - n_sur):
+                sur_obs_list.append(list(np.zeros(self.sur_dim)))
+            sur_obs_list = np.array(sur_obs_list)[:self.max_consider_nps, :]
 
         obs = dict(
             sur_obs=dict(
