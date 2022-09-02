@@ -33,7 +33,6 @@ name = 'checkpoint.pth'
 
 
 def load_policy(cfgs, name):
-
     cfgs.device = 'cpu'
 
     def noisy_linear(x, y):
@@ -84,31 +83,23 @@ def load_policy(cfgs, name):
     return _policy
 
 
-def run(worker_index):
-    try:
-        env = gym.make("MatrixEnv-v1", scenarios=Scenarios.INFERENCE)
+env = gym.make(
+    "MatrixEnv-v1",
+    scenarios=Scenarios.INFERENCE,
+    # render_id='test'
+)
+
+obs = env.reset()
+policy = load_policy(cfg, name)
+
+while True:
+    data = get_observation_for_test(cfg=cfg, obs=obs)
+    result = policy(data)
+    data.update(act=result.act)
+    act = policy.map_action(data)[0]
+    obs, reward, done, info = env.step(act)
+    infer_done = DoneReason.INFERENCE_DONE == info.get("DoneReason", "")
+    if done and not infer_done:
         obs = env.reset()
-        policy = load_policy(cfg, name)
-        while True:
-            data = get_observation_for_test(cfg=cfg, obs=obs)
-            result = policy(data)
-            data.update(act=result.act)
-            act = policy.map_action(data)[0]
-            obs, reward, done, info = env.step(act)
-            infer_done = DoneReason.INFERENCE_DONE == info.get("DoneReason", "")
-            if done and not infer_done:
-                obs = env.reset()
-            elif infer_done:
-                break
-    except Exception as e:
-        logger.info(f"{worker_index}, error: {str(e)}")
-
-
-if __name__ == "__main__":
-    num_workers = 1
-
-    pool = Pool(num_workers)
-    pool_result = pool.map_async(run, list(range(num_workers)))
-    pool_result.wait(timeout=3000)
-
-    logger.info("inference done.")
+    elif infer_done:
+        break
