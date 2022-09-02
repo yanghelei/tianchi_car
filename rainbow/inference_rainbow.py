@@ -33,6 +33,9 @@ name = 'checkpoint.pth'
 
 
 def load_policy(cfgs, name):
+
+    cfgs.device = 'cpu'
+
     def noisy_linear(x, y):
         return NoisyLinear(x, y, cfgs.noisy_std)
 
@@ -66,11 +69,11 @@ def load_policy(cfgs, name):
     ckpt_path = os.path.join(log_path, name)
     if os.path.exists(ckpt_path):
         if name == 'best_policy.pth':
-            best_policy = torch.load(ckpt_path, map_location='cpu')
+            best_policy = torch.load(ckpt_path, map_location=cfgs.device)
             _policy.load_state_dict(best_policy)
             logger.info("Successfully restore policy.")
         else:
-            checkpoint = torch.load(ckpt_path, map_location='cpu')
+            checkpoint = torch.load(ckpt_path, map_location=cfgs.device)
             _policy.load_state_dict(checkpoint['model'])
             logger.info("Successfully restore policy.")
     else:
@@ -101,7 +104,7 @@ def run(worker_index):
 if __name__ == "__main__":
     torch.multiprocessing.set_start_method('spawn')
 
-    num_workers = 1
+    num_workers = 12
 
     pool = Pool(num_workers)
     pool_result = pool.map_async(run, list(range(num_workers)))
