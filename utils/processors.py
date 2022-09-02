@@ -19,7 +19,7 @@ def get_observation_for_test(cfg, obs):
             npc_info[2] - curr_xy[0],  # dx
             npc_info[3] - curr_xy[1],  # dy
             npc_info[4],  # 障碍物朝向
-            np.sqrt(npc_info[5] ** 2 + npc_info[6] ** 2),  # 障碍物速度大小（标量）
+            np.sqrt(npc_info[5] ** 2 + npc_info[6] ** 2) - obs["player"]["status"][3],  # 障碍物速度大小（标量） - 当前车速度大小
             np.sqrt(npc_info[7] ** 2 + npc_info[8] ** 2),  # 障碍物加速度大小（标量）
             npc_info[9],  # 障碍物宽度
             npc_info[10],  # 障碍物长度
@@ -55,14 +55,18 @@ def get_observation_for_test(cfg, obs):
     prev_acc = obs["player"]["status"][8]  # 上一个加速度命令
     lane_list = []
 
+    speed_limit = 33.33
     if obs["map"] is not None:
         for lane_info in obs["map"].lanes:
             lane_list.append(lane_info.lane_id)
+            if obs["map"].lane_id == lane_info.lane_id:
+                speed_limit = lane_info.speed_limit
         current_lane_index = lane_list.index(obs["map"].lane_id)
         current_offset = obs["map"].lane_offset
     else:  # 按照主办方的说法，车开到道路外有可能出现 none 的情况
         current_lane_index = -1.0
         current_offset = 0.0
+
         # self.logger.info('Env:' + str(env_id) + '\tobs[\'map\'] is None in get_observation(obs)!!!\tUse -1 as lane_index and 0.0 offset as to keep running!')
 
     ego_obs = np.array(
@@ -74,6 +78,7 @@ def get_observation_for_test(cfg, obs):
             prev_steer,  # 上一个前轮转角命令
             prev_acc,  # 上一个加速度命令
             current_lane_index,  # 当前所处车道的id
+            speed_limit - curr_velocity,  # 当前车道速度上限与当前车速的差值
             current_offset,  # 车道的偏移量
         ]]
     )
