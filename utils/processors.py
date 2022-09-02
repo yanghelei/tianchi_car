@@ -142,11 +142,17 @@ class Processor:
         delta_xy = (target_xy[0] - curr_xy[0], target_xy[1] - curr_xy[1])  # 目标区域与当前位置的绝对偏差
         curr_yaw = observation["player"]["status"][2]  # 当前朝向
         curr_velocity = observation["player"]["status"][3]  # 当前车辆后轴中心纵向速度
-        # curr_acc = observation["player"]["status"][4]  # 当前车辆后轴中心纵向加速度
+        curr_acc = observation["player"]["status"][4]  # 当前车辆后轴中心纵向加速度
         curr_lateral_acc = observation["player"]["status"][5]  # 当前车辆后轴中心横向加速度
-        # curr_steer = observation["player"]["status"][6]  # 当前前轮转角
+        curr_steer = observation["player"]["status"][6]  # 当前前轮转角
         prev_steer = observation["player"]["status"][7]  # 上一个前轮转角命令
         prev_acc = observation["player"]["status"][8]  # 上一个加速度命令
+
+        if prev_acc != curr_acc:
+            self.logger.info(f'Now forward acc is {curr_acc}, last action acc is {prev_acc}!')
+        if prev_steer != curr_steer:
+            self.logger.info(f'Now steer is {curr_steer}, last action steer is {prev_steer}!')
+
         lane_list = []
 
         speed_limit = 33.33
