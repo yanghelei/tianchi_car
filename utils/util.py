@@ -3,6 +3,7 @@ import numpy as np
 
 import torch
 import torch.nn as nn
+import numpy as np 
 
 def init(module, weight_init, bias_init, gain=1):
     weight_init(module.weight.data, gain=gain)
@@ -11,6 +12,10 @@ def init(module, weight_init, bias_init, gain=1):
 
 def init_(m, init_metorchod, gain=1):
     return init(m, init_metorchod, lambda x: nn.init.constant_(x, 0), gain=gain)
+
+def orthogonal_init_(m, gain=np.sqrt(2)):
+
+    return init(m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0), gain=gain)
 
 def get_clones(module, N):
     return nn.ModuleList([copy.deepcopy(module) for i in range(N)])

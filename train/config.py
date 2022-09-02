@@ -17,6 +17,9 @@ class PolicyParam:
     seed: int = 1234
 
     debug = False
+    use_eval = True
+    device: str = "cuda" if torch.cuda.is_available() else "cpu"
+
     if debug:
         num_workers = 1
         random_episode = 0
@@ -31,9 +34,24 @@ class PolicyParam:
         batch_size: int =  4196
         minibatch_size: int = 256
         num_epoch: int = 3
+
+    # trick use    
+    use_target_kl: bool = False
+    use_advantage_norm: bool = True
+    use_clipped_value_loss: bool = True
+    use_value_norm: bool = True
+    use_clip_grad: bool = True
+
+    # schedule
+    schedule_adam: str = "fix"
+    schedule_clip: str = "fix"
+
     save_num_episode: int = 10
     log_num_episode: int = 10
+    eval_interval: int = 100
+    eval_episode: int = 100 
 
+    # params
     gamma: float = 0.99
     lamda: float = 0.95
     loss_coeff_value: float = 0.5
@@ -46,14 +64,6 @@ class PolicyParam:
     #field 用法??
     lr_schedule: List = field(default_factory=[[0, 0.0001], [2000000, 5e-05], [3000000, 1e-05]])
     EPS: float = 1e-10
-    device: str = "cuda" if torch.cuda.is_available() else "cpu"
-
-    schedule_adam: str = "fix"
-    schedule_clip: str = "fix"
-    use_target_kl: bool = False
-    advantage_norm: bool = True
-    use_clipped_value_loss: bool = True
-    use_value_norm: bool = True
 
     reload = False
 

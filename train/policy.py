@@ -11,7 +11,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from train.config import PolicyParam
-from train.tools import initialize_weights
+from utils.util import orthogonal_init_
 import numpy as np 
 from torch.distributions.normal import Normal
 from utils.norm import Normalization
@@ -50,8 +50,8 @@ class TimeVecFeatureNet(nn.Module):
         """
         super().__init__()
         self.hidden_size = hidden_size
-        self.layer_1 = nn.Linear(input_shape, hidden_size)
-        self.layer_2 = nn.Linear(num, 1)
+        self.layer_1 = orthogonal_init_(nn.Linear(input_shape, hidden_size))
+        self.layer_2 = orthogonal_init_(nn.Linear(num, 1))
         
     def forward(self, input):
         """
@@ -69,13 +69,18 @@ class PPOPolicy(nn.Module):
         self.policy_param = PolicyParam
         self.sur_feature_net = TimeVecFeatureNet(70, 5, 128)
         self.ego_feature_net = TimeVecFeatureNet(8, 5, 128)
-        self.feature_net = nn.Sequential(nn.Linear(256, 256), nn.ReLU())
+        self.feature_net = nn.Sequential(
+                           orthogonal_init_(nn.Linear(256, 256)), 
+                           nn.ReLU())
+        # orthogonal_init trick
+        #initialization of weights with scaling np.sqrt(2), and the biases are set to 0
+        # the policy output layer weights are initialized with the scale of 0.01
         self.actor_net = nn.Sequential(
             OrderedDict(
                 [
-                    ("actor_1", nn.Linear(256, 256)),
+                    ("actor_1", orthogonal_init_(nn.Linear(256, 256))),
                     ("actor_relu_1", nn.ReLU()),
-                    ("actor_mu", nn.Linear(256, num_outputs)),
+                    ("actor_mu", orthogonal_init_(nn.Linear(256, num_outputs), gain=0.01)),
                 ]
             )
         )
@@ -83,9 +88,9 @@ class PPOPolicy(nn.Module):
         self.critic_net = nn.Sequential(
             OrderedDict(
                 [
-                    ("critic_1", nn.Linear(256, 256)),
+                    ("critic_1", orthogonal_init_(nn.Linear(256, 256))),
                     ("critic_relu_1", nn.ReLU()),
-                    ("critic_output", nn.Linear(256, 1)),
+                    ("critic_output", orthogonal_init_(nn.Linear(256, 1))),
                 ]
             )
         )
@@ -94,7 +99,6 @@ class PPOPolicy(nn.Module):
         self.log_std = torch.nn.Parameter(torch.zeros(num_outputs), requires_grad=True)
         self.sur_obs_norm = Normalization(70)
         self.ego_obs_norm = Normalization(8)
-        initialize_weights(self, "orthogonal", scale = np.sqrt(2))
 
     def get_env_feature(self, sur_obs, ego_obs):
         

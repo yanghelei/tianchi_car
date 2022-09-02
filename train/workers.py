@@ -133,6 +133,47 @@ class EnvWorker(mp.Process):
                     except Exception as e:
                         logger.error(f"exception: {traceback.print_exc()}")
 
+            elif command == 'eval':
+
+                while Get_Enough_Batch.value == 0:
+                    try:
+                        episode = Episode()
+                        obs = self.env.reset()
+                        vec_state, env_state = self.env_post_processer.reset(obs)
+                        while Get_Enough_Batch.value == 0:
+                            with torch.no_grad():
+                                action, gaussian_action, logproba, value = policy.select_action(env_state, vec_state, True)
+                                action = action.data.cpu().numpy()[0]
+                                logproba = logproba.data.cpu().numpy()[0]
+                                value = value.data.cpu().numpy()[0][0]
+                                gaussian_action = gaussian_action.data.cpu().numpy()[0]
+                                env_state = env_state.data.cpu().numpy()[0]
+                                vec_state = vec_state.data.cpu().numpy()[0]
+                            # 映射到环境动作
+                            env_action = self.action_transform(gaussian_action)
+                            obs, reward, done, info = self.env.step(env_action)
+                            # 出现error则则放弃本回合的数据
+                            if DoneReason.INFERENCE_DONE == info.get("DoneReason", ""):
+                                break
+                            elif True == info.get('RuntimeError', ""):
+                                break
+                            if not done:
+                                new_env_state = self.env_post_processer.assemble_surr_vec_obs(obs)
+                                new_vec_state = self.env_post_processer.assemble_ego_vec_obs(obs)
+                            reward = self.env_post_processer.assemble_reward(obs, info)
+                            mask = 0 if done else 1
+                            episode.push(
+                                env_state, vec_state, value, action, gaussian_action, logproba, mask, reward, info,
+                            )
+                            if done:
+                                with self.lock:
+                                    self.queue.put(episode)
+                                break
+                            env_state = new_env_state
+                            vec_state = new_vec_state
+                    except Exception as e:
+                        logger.error(f"exception: {traceback.print_exc()}")
+
             elif command == "close":
                 self.remote.close()
                 self.env.close()
@@ -186,6 +227,25 @@ class MemorySampler(object):
         policy.to(self.device)
         return memory
 
+    def eval(self, policy, eval_episode):
+        policy.to('cpu')
+        memory =  Memory()
+        Get_Enough_Batch.value = 0
+        for remote in self.remotes:
+            remote.send(("eval", policy))
+            
+        while memory.num_episode < eval_episode:
+            episode = self.queue.get(True)
+            memory.push(episode)
+
+        Get_Enough_Batch.value = 1
+
+        while self.queue.qsize() > 0:
+            self.queue.get()
+
+        policy.to(self.device)
+        return memory
+        
     def close(self):
         Get_Enough_Batch.value = 1
         for remote in self.remotes:
