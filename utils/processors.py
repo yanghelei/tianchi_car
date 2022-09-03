@@ -22,7 +22,7 @@ def get_observation_for_test(cfg, obs):
     # curr_acc = obs["player"]["status"][4]  # 当前车辆后轴中心纵向加速度
     curr_lateral_acc = obs["player"]["status"][5]  # 当前车辆后轴中心横向加速度
     curr_steer = obs["player"]["status"][6]  # 当前前轮转角
-    # prev_steer = obs["player"]["status"][7]  # 上一个前轮转角命令
+    prev_steer = obs["player"]["status"][7]  # 上一个前轮转角命令
     prev_acc = obs["player"]["status"][8]  # 上一个加速度命令
     lane_list = []
 
@@ -47,7 +47,8 @@ def get_observation_for_test(cfg, obs):
             curr_yaw,  # 当前车辆的朝向角
             curr_velocity,  # 车辆后轴当前纵向速度
             curr_lateral_acc,  # 车辆当前后轴横向加速度
-            curr_steer,  # 上一个前轮转角命令×(车辆当前前轮转角√)
+            curr_steer,  # 车辆当前前轮转角
+            prev_steer,  # 上一个前轮转角命令
             prev_acc,  # 上一个加速度命令(车辆当前后轴纵向加速度)
             current_lane_index,  # 当前所处车道的id
             speed_limit - curr_velocity,  # 当前车道速度上限与当前车速的差值
@@ -64,9 +65,13 @@ def get_observation_for_test(cfg, obs):
         npc_info_dict[np.sqrt((npc_info[2] - curr_xy[0]) ** 2 + (npc_info[3] - curr_xy[1]) ** 2)] = [
             npc_info[2] - curr_xy[0],  # dx
             npc_info[3] - curr_xy[1],  # dy
-            npc_info[4] - curr_yaw,  # 障碍物朝向 - 当前车的朝向
-            np.sqrt(npc_info[5] ** 2 + npc_info[6] ** 2) - obs["player"]["status"][3],  # 障碍物速度大小（标量） - 当前车速度大小
-            np.sqrt(npc_info[7] ** 2 + npc_info[8] ** 2) - prev_acc,  # 障碍物加速度大小（标量） - 当前车加速度大小
+            npc_info[4],  # 障碍物朝向
+            npc_info[5],  # vx
+            npc_info[6],  # vy
+            # np.sqrt(npc_info[5] ** 2 + npc_info[6] ** 2) - observation["player"]["status"][3],  # 障碍物速度大小（标量） - 当前车速度大小
+            npc_info[7],  # ax
+            npc_info[8],  # ay
+            # np.sqrt(npc_info[7] ** 2 + npc_info[8] ** 2),  # 障碍物加速度大小（标量）
             npc_info[9],  # 障碍物宽度
             npc_info[10],  # 障碍物长度
         ]
@@ -118,6 +123,10 @@ class Processor:
 
         self.update_norm = update_norm
 
+        steer_prime_choices = cfgs.steer_prime_choices
+        acc_prime_choice = cfgs.acc_prime_choice
+        self.action_library = np.array(list(itertools.product(steer_prime_choices, acc_prime_choice)))
+
         # self.surr_vec_deque = collections.deque(maxlen=cfgs.history_length)
 
     # def assemble_surr_vec_obs(self, obs, sur_norm_layer, ego_norm_layer):
@@ -145,7 +154,7 @@ class Processor:
         curr_acc = observation["player"]["status"][4]  # 当前车辆后轴中心纵向加速度
         curr_lateral_acc = observation["player"]["status"][5]  # 当前车辆后轴中心横向加速度
         curr_steer = observation["player"]["status"][6]  # 当前前轮转角
-        # prev_steer = observation["player"]["status"][7]  # 上一个前轮转角命令
+        prev_steer = observation["player"]["status"][7]  # 上一个前轮转角命令
         prev_acc = observation["player"]["status"][8]  # 上一个加速度命令
 
         if prev_acc != curr_acc:
@@ -176,7 +185,8 @@ class Processor:
                 curr_yaw,  # 当前车辆的朝向角
                 curr_velocity,  # 车辆后轴当前纵向速度
                 curr_lateral_acc,  # 车辆当前后轴横向加速度
-                curr_steer,  # 上一个前轮转角命令×(车辆当前前轮转角√)
+                curr_steer,  # 车辆当前前轮转角
+                prev_steer,  # 上一个前轮转角命令
                 prev_acc,  # 上一个加速度命令(车辆当前后轴纵向加速度)
                 current_lane_index,  # 当前所处车道的id
                 speed_limit - curr_velocity,  # 当前车道速度上限与当前车速的差值
@@ -193,9 +203,13 @@ class Processor:
             npc_info_dict[np.sqrt((npc_info[2] - curr_xy[0]) ** 2 + (npc_info[3] - curr_xy[1]) ** 2)] = [
                 npc_info[2] - curr_xy[0],  # dx
                 npc_info[3] - curr_xy[1],  # dy
-                npc_info[4] - curr_yaw,  # 障碍物朝向 - 当前车的朝向
-                np.sqrt(npc_info[5] ** 2 + npc_info[6] ** 2) - observation["player"]["status"][3],  # 障碍物速度大小（标量） - 当前车速度大小
-                np.sqrt(npc_info[7] ** 2 + npc_info[8] ** 2) - prev_acc,  # 障碍物加速度大小（标量） - 当前车加速度大小
+                npc_info[4],  # 障碍物朝向
+                npc_info[5],  # vx
+                npc_info[6],  # vy
+                # np.sqrt(npc_info[5] ** 2 + npc_info[6] ** 2) - observation["player"]["status"][3],  # 障碍物速度大小（标量） - 当前车速度大小
+                npc_info[7],  # ax
+                npc_info[8],  # ay
+                # np.sqrt(npc_info[7] ** 2 + npc_info[8] ** 2),  # 障碍物加速度大小（标量）
                 npc_info[9],  # 障碍物宽度
                 npc_info[10],  # 障碍物长度
             ]
@@ -211,6 +225,19 @@ class Processor:
                 sur_obs_list.append(list(np.zeros(self.sur_dim)))
             sur_obs_list = np.array(sur_obs_list)[:self.max_consider_nps, :]
 
+        # action mask module
+        if curr_velocity > speed_limit:
+            acc_prime_mask = self.action_library[:, 1] <= 0  # 速度太快，屏蔽继续加速的动作
+        else:
+            acc_prime_mask = np.ones((len(self.action_library), ), dtype=np.bool_)
+        if curr_steer < -pi/18:  # 前轮左转大于10°，屏蔽继续左转的动作
+            steer_prime_mask = self.action_library[:, 0] >= 0
+        elif curr_steer > pi/18:  # 前轮右转大于10°，屏蔽继续右转的动作
+            steer_prime_mask = self.action_library[:, 0] <= 0
+        else:
+            steer_prime_mask = np.ones((len(self.action_library), ), dtype=np.bool_)
+        mask = acc_prime_mask & steer_prime_mask
+
         obs = dict(
             sur_obs=dict(
                 n=n_sur,
@@ -219,11 +246,14 @@ class Processor:
             ego_obs=dict(
                 n=1,
                 data=ego_obs
-            )
+            ),
+            mask=mask
         )
+
         if self.update_norm:
             self.model.sur_norm.update(sur_obs_list[:n_sur])
             self.model.ego_norm.update(ego_obs)
+
         return obs
 
     def compute_reward(self, env_id, next_obs, info):
@@ -237,7 +267,8 @@ class Processor:
         assert self.env_last_distance[env_id] is not None
 
         # distance_reward = (self.env_last_distance[env_id] - distance_with_target) / (self.target_speed * self.dt)
-        distance_reward = (self.env_last_distance[env_id] - distance_with_target) * 0.5
+        # distance_reward = (self.env_last_distance[env_id] - distance_with_target) * 0.5
+        distance_close = self.env_last_distance[env_id] - distance_with_target
 
         self.env_last_distance[env_id] = distance_with_target
 
@@ -245,6 +276,8 @@ class Processor:
 
         car_status = next_obs['player']['status']
         last_car_status = self.env_last_obs[env_id]['player']['status']
+
+        fastly_brake = False
         """
             急刹
             判据: 1.纵向加速度绝对值大于2；
@@ -258,9 +291,12 @@ class Processor:
 
         last_car_forward_acc = last_car_status[4]
         if abs(car_forward_acc) > 2 or abs((last_car_forward_acc-car_forward_acc)/self.dt) > 0.9:
+            fastly_brake = True
             brake_reward = -10
         else:
             brake_reward = 0
+
+        big_turn = False
         """
             大转向
             判据: 1.横向加速度绝对值大于4；
@@ -270,12 +306,14 @@ class Processor:
         car_lateral_acc = car_status[5]
         last_car_lateral_acc = last_car_status[5]
         if abs(car_lateral_acc) > 4 or abs((car_lateral_acc-last_car_lateral_acc)/self.dt) > 0.9:
+            big_turn = True
             turn_reward = -10
         else:
             turn_reward = 0
 
         # 压线 TODO: 压线的判据
 
+        over_speed = False
         """
             超速
             判据: 1.车速超过当前车道上限的20%；
@@ -283,7 +321,6 @@ class Processor:
             扣分: 15分每次，最高30
             TODO: 全程平均车速尚未考虑
         """
-
         if next_obs["map"] is not None:
             speed_limit = None
             for lane_info in next_obs["map"].lanes:
@@ -298,22 +335,28 @@ class Processor:
             # self.logger.info('Env:' + str(env_id) + 'next_obs[\'map\'] is None!!!\tUse inf as speed limit to keep running!')
         car_speed = car_status[3]  # 当前车速
         if car_speed > speed_limit:
+            over_speed = True
             high_speed_reward = -15
         else:
             high_speed_reward = 0
 
-        rule_reward = brake_reward + turn_reward + high_speed_reward
+        # rule_reward = brake_reward + turn_reward + high_speed_reward
+
+        if fastly_brake or big_turn or over_speed:
+            rule_reward = brake_reward + turn_reward + high_speed_reward
+        else:
+            rule_reward = distance_close * 0.5
 
         if info["collided"]:  # 碰撞
             end_reward = -100
         elif info["reached_stoparea"]:  #
             end_reward = 100
-        elif info["timeout"]:  # 超时未完成
-            end_reward = -100
+        # elif info["timeout"]:  # 超时未完成
+        #     end_reward = -100
         else:
             end_reward = 0.0  # 尚未 terminate
 
-        return distance_reward + end_reward + step_reward + rule_reward
+        return end_reward + step_reward + rule_reward
 
     def update_distance_to_target(self, env_id):
         obs = self.env_last_obs[env_id]
