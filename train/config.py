@@ -42,7 +42,7 @@ class PolicyParam():
     use_value_norm: bool = True
     use_clip_grad: bool = True
     share: bool = False
-    independent_std: bool = False
+    independent_std: bool = True
 
     # schedule
     schedule_adam: str = "fix"

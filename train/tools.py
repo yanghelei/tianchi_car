@@ -278,9 +278,34 @@ class EnvPostProcsser:
         else:
             end_reward = 0.0
         
-        # add penalty when reaching close to other cars
-            
-        return distance_reward + end_reward + step_reward
+        # add penalty when reaching close to other cars (same lane)
+        if observation['map'] is not None:
+            current_lane_index = observation["map"].lane_id
+        else:
+            current_lane_index = -1
+        length = observation["player"]['property'][1] # 车辆长度
+        npc_info = observation['npcs'] 
+        same_lane_npcs = [] # 同车道 npc
+        for npc in npc_info:
+            if npc[0] == 0:
+                break
+            try: 
+                lane_id = info['agent_infos'][npc[0]]['lane_id']
+            except KeyError:
+                continue
+            if lane_id == current_lane_index:
+                same_lane_npcs.append(npc)
+        collide_reward = 0
+        for npc in same_lane_npcs:
+            safe_distance = (npc[-1] + length)/2
+            dx = npc[2] - observation["player"]['status'][0]
+            dy = npc[3] - observation["player"]['status'][1]
+            distance = np.sqrt(dx**2+dy**2)
+            if distance < safe_distance:
+                penalty = -0.1-(safe_distance-distance)*0.1
+                collide_reward = min(collide_reward, penalty)
+
+        return distance_reward + end_reward + step_reward + collide_reward
 
     def reset(self, initial_obs):
         self.prev_distance = None
