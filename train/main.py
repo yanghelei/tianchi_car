@@ -7,6 +7,7 @@ import os
 import time
 import shutil
 from pathlib import Path
+from cv2 import mean
 import numpy as np
 import torch
 import torch.nn as nn
@@ -141,7 +142,6 @@ class MulProPPO:
         advantages = torch.Tensor(batch_size)
         prev_advantage = torch.Tensor([0])
         prev_value = torch.Tensor([0])
-
         for i in reversed(range(batch_size)):
             if self.args.use_value_norm:
                 deltas[i] = rewards[i] + self.args.gamma*self.value_norm.denormalize(prev_value) \
@@ -156,7 +156,9 @@ class MulProPPO:
 
             prev_advantage = advantages[i]
             prev_value = values[i]
-
+        # update returns
+        if self.args.use_value_norm:
+            self.value_norm.update(returns)
         sur_obs = sur_obs.to(self.args.device)
         values = values.to(self.args.device)
         vec_obs = vec_obs.to(self.args.device)
@@ -219,10 +221,9 @@ class MulProPPO:
 
         # update normalization 
         self.model.update_norm(sur_obs.view(-1, sur_obs.shape[-1]), vec_obs.view(-1, vec_obs.shape[-1]))
-        if self.args.use_value_norm:
-            self.value_norm.update(returns)
-
-        return total_loss, loss_surr, loss_value, loss_entropy, rewards
+        info = dict(kl=approx_kl, total_loss=total_loss.item(), loss_surr=loss_surr.item(),
+                    loss_entropy=loss_entropy.item(), loss_value=loss_value.item())
+        return info
 
     def schedule(self, i_episode):
         # clip linearly decreanse
@@ -270,9 +271,52 @@ class MulProPPO:
 
         return lr_now, iteration_reduce
 
+    def log(self, memory, rewards, info, episode):
+        
+        total_loss = info['total_loss']
+        loss_surr = info['loss_surr']
+        loss_value = info['loss_value']
+        loss_entropy = info['loss_entropy']
+        lr_now = info['lr_now']
+        lr_iteration_reduce = info['lr_iteration_reduce']
+        mean_reward = (np.sum(rewards) / memory.num_episode)
+        mean_step = len(memory) // memory.num_episode
+        reach_goal_rate = memory.arrive_goal_num / memory.num_episode
+
+        self.logger.info("Finished iteration: " + str(episode))
+        self.logger.info("reach goal rate: " + str(reach_goal_rate))
+        self.logger.info("reward: " + str(round(mean_reward,2)))
+        self.logger.info(
+            "total loss: "
+            + str(round(total_loss, 3))
+            + " = "
+            + str(round(loss_surr,3))
+            + "+"
+            + str(self.args.loss_coeff_value)
+            + "*"
+            + str(round(loss_value,3))
+            + "+"
+            + str(self.args.loss_coeff_entropy)
+            + "*"
+            + str(round(loss_entropy,3))
+        )
+        self.logger.info("Step: " + str(mean_step))
+        self.logger.info("total data number: " + str(self.global_sample_size))
+        self.logger.info(
+            "lr now: " + str(lr_now) + "  lr reduce per iteration: " + str(lr_iteration_reduce)
+        )
+        self.writer.scalar_summary("reward", mean_reward, episode)
+        self.writer.scalar_summary("reach_goal_rate", reach_goal_rate, episode)
+        self.writer.scalar_summary('pi_loss', loss_surr, episode)
+        self.writer.scalar_summary('value_loss', loss_value, episode)
+        self.writer.scalar_summary('entropy_loss', loss_entropy, episode)
+        self.writer.scalar_summary('approx_kl', info['kl'], episode)
+        self.writer.scalar_summary('mean_step', mean_step, episode)
+
     def train(self):
         nc = notice("oWbT458Ya1xKsC1d_E_RXWf0MNos")
         nc.task_complete_notice(task_name="Training", task_progree="training Started.")
+        best_reward = -np.inf
 
         for i_episode in range(self.args.num_episode):
 
@@ -281,57 +325,28 @@ class MulProPPO:
             batch_size = len(memory)
             self.global_sample_size += batch_size
             # update policy
-            total_loss, loss_surr, loss_value, loss_entropy, rewards = self.update(batch, i_episode, batch_size)
+            info = self.update(batch, i_episode, batch_size)
             # schedule lr and clip
             lr_now, lr_iteration_reduce = self.schedule(i_episode)
+            info['lr_now'] = lr_now
+            info['lr_iteration_reduce'] = lr_iteration_reduce
+            # log 
             if i_episode % self.args.log_num_episode == 0:
                 self.logger.info(
                 "----------------------" + str(i_episode) + "-------------------------"
                                 ) 
-                mean_reward = (torch.sum(rewards) / memory.num_episode).data
-                mean_step = len(memory) // memory.num_episode
-                reach_goal_rate = memory.arrive_goal_num / memory.num_episode
-
-                reward = mean_reward.cpu().data.item()
-                total_loss = total_loss.cpu().data.item()
-                loss_surr = loss_surr.cpu().data.item()
-                loss_value = loss_value.cpu().data.item()
-                loss_entropy = loss_entropy.cpu().data.item()
-                self.logger.info("Finished iteration: " + str(i_episode))
-                self.logger.info("reach goal rate: " + str(reach_goal_rate))
-                self.logger.info("reward: " + str(round(reward,2)))
-                self.logger.info(
-                    "total loss: "
-                    + str(round(total_loss, 3))
-                    + " = "
-                    + str(round(loss_surr,3))
-                    + "+"
-                    + str(self.args.loss_coeff_value)
-                    + "*"
-                    + str(round(loss_value,3))
-                    + "+"
-                    + str(self.args.loss_coeff_entropy)
-                    + "*"
-                    + str(round(loss_entropy,3))
-                )
-                self.logger.info("Step: " + str(mean_step))
-                self.logger.info("total data number: " + str(self.global_sample_size))
-                self.logger.info(
-                    "lr now: " + str(lr_now) + "  lr reduce per iteration: " + str(lr_iteration_reduce)
-                )
-                self.writer.scalar_summary("reward", reward, i_episode)
-                self.writer.scalar_summary("total_loss", total_loss, i_episode)
-                self.writer.scalar_summary("reach_goal_rate", reach_goal_rate, i_episode)
-                self.writer.scalar_summary('pi_loss', loss_surr, i_episode)
-                self.writer.scalar_summary('value_loss', loss_value, i_episode)
-                self.writer.scalar_summary('entropy_loss', loss_entropy, i_episode)
-                self.writer.show('reach_goal_rate')
-
+                self.log(memory, batch.reward, info, i_episode)
+                
             if i_episode % self.args.eval_interval == 0 and self.args.use_eval:
                 memory = self.sampler.eval(self.model, self.args.eval_episode)
                 batch = memory.sample()
                 mean_reward = np.sum(batch.reward) / memory.num_episode
                 mean_step = len(memory) // memory.num_episode
+                if best_reward < mean_reward:
+                    best_reward = mean_reward
+                    torch.save(
+                    self.model.state_dict(), remote_path + "/best_network.pth"
+                            )
                 self.logger.info(
                 "--------------------" + 'Eval ' + str(i_episode) + "---------------------"
                                 )
@@ -339,6 +354,21 @@ class MulProPPO:
                 self.logger.info("Mean Step: " + str(mean_step))
                 self.logger.info("Success Rate: " + str(reach_goal_rate))
                 self.logger.info('Mean Reward:' + str(mean_reward))
+                self.logger.info('Best Reward:' + str(best_reward))
+                self.writer.scalar_summary('Eval Successs Rate', reach_goal_rate, i_episode)
+                self.writer.scalar_summary('Eval Mean Reward', mean_reward, i_episode)
+                self.writer.scalar_summary('Eval Mean Step', mean_step, i_episode)
+                
+                self.writer.show('Eval Successs Rate')
+                self.writer.show('Eval Mean Reward')
+                self.writer.show('Eval Mean Step')
+                self.writer.show('reach_goal_rate')
+                self.writer.show('reward')
+                self.writer.show('approx_kl')
+                self.writer.show('value_loss')
+                self.writer.show('pi_loss')
+                self.writer.show('entropy_loss')
+                self.writer.show('mean_step')
 
             if i_episode % self.args.save_num_episode == 0 and i_episode > self.args.random_episode:
                 torch.save(
@@ -349,10 +379,6 @@ class MulProPPO:
                     self.model.state_dict(), remote_path + "/network.pth"
                 )
                 self.logger.info(f'model has been successfully saved : {remote_path}')
-            
-            # 超时则提前结束训练   
-            if (time.time() - self.start_time) > 9*3600:
-                break
 
         torch.save(
             self.model.state_dict(), self.model_dir + "network.pth"

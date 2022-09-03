@@ -111,10 +111,10 @@ class EnvWorker(mp.Process):
                             # 映射到环境动作
                             env_action = self.action_transform(gaussian_action)
                             obs, reward, done, info = self.env.step(env_action)
-                            # 出现error则则放弃本回合的数据
-                            if DoneReason.INFERENCE_DONE == info.get("DoneReason", ""):
-                                break
-                            elif True == info.get('RuntimeError', ""):
+                            is_runtime_error = info.get(DoneReason.Runtime_ERROR, False)
+                            is_infer_error = info.get(DoneReason.INFERENCE_DONE, False)
+                            # 出现error则放弃本帧数据
+                            if is_infer_error or is_runtime_error:
                                 break
                             if not done:
                                 new_env_state = self.env_post_processer.assemble_surr_vec_obs(obs)

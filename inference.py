@@ -47,15 +47,15 @@ def run(worker_index):
             steer = EnvWorker.lmap(action[0],[-1.0, 1.0],[low_action[0], high_action[0]],)
             acc = EnvWorker.lmap(action[1], [-1.0, 1.0], [low_action[1], high_action[1]])
             obs, _, done, info = env.step(numpy.array([steer, acc]))
-            infer_done = DoneReason.INFERENCE_DONE == info.get("DoneReason", "")
-            if done:
-                print(info)
-            if done and not infer_done:
+            is_runtime_error = info.get(DoneReason.Runtime_ERROR, False)
+            is_infer_error = info.get(DoneReason.INFERENCE_DONE, False)
+            # 出现error则放弃本帧数据
+            if is_infer_error or is_runtime_error:
+                break
+            if done :
                 obs = env.reset()
                 env_post_processer.reset(obs)
                 logger.info(f"env rest")
-            elif infer_done :
-                break
             env_state = env_post_processer.assemble_surr_vec_obs(obs)
             vec_state = env_post_processer.assemble_ego_vec_obs(obs)
     except Exception as e:

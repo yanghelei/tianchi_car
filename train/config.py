@@ -30,7 +30,7 @@ class PolicyParam:
     else:
         num_workers: int = 12
         random_episode: int = 20
-        num_episode: int = 1000
+        num_episode: int = 1200
         batch_size: int =  4196
         minibatch_size: int = 256
         num_epoch: int = 3
