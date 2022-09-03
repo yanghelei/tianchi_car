@@ -226,14 +226,15 @@ class Processor:
             sur_obs_list = np.array(sur_obs_list)[:self.max_consider_nps, :]
 
         # action mask module
-        if curr_velocity > speed_limit:
-            acc_prime_mask = self.action_library[:, 1] <= 0  # 速度太快，屏蔽继续加速的动作
+        if curr_velocity > speed_limit and prev_acc > 0:
+            # 如果【当前速度大于该条车道的限速】，并且【当前加速度大于零（车辆仍在加速状态）】
+            acc_prime_mask = self.action_library[:, 1] < 0  # 速度太快，屏蔽继续加速的动作
         else:
             acc_prime_mask = np.ones((len(self.action_library), ), dtype=np.bool_)
         if curr_steer < -pi/18:  # 前轮左转大于10°，屏蔽继续左转的动作
-            steer_prime_mask = self.action_library[:, 0] >= 0
+            steer_prime_mask = self.action_library[:, 0] > 0
         elif curr_steer > pi/18:  # 前轮右转大于10°，屏蔽继续右转的动作
-            steer_prime_mask = self.action_library[:, 0] <= 0
+            steer_prime_mask = self.action_library[:, 0] < 0
         else:
             steer_prime_mask = np.ones((len(self.action_library), ), dtype=np.bool_)
         mask = acc_prime_mask & steer_prime_mask
