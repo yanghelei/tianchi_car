@@ -13,7 +13,7 @@ from gym.spaces import Box
 import numpy as np 
 
 @dataclass
-class PolicyParam:
+class PolicyParam():
     seed: int = 1234
 
     debug = False
@@ -41,6 +41,8 @@ class PolicyParam:
     use_clipped_value_loss: bool = True
     use_value_norm: bool = True
     use_clip_grad: bool = True
+    share: bool = False
+    independent_std: bool = False
 
     # schedule
     schedule_adam: str = "fix"
@@ -67,7 +69,7 @@ class PolicyParam:
 
     reload = False
 
-    model_path: str = None
+    model_path: str = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'gaussian_ppo_v2' / 'network.pth')
     obs_type: str = "vec"
     img_width: int = 224
     img_length: int = 224

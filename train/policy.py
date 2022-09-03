@@ -63,27 +63,62 @@ class TimeVecFeatureNet(nn.Module):
         layer_2_out = layer_2_out.view(batch_size, self.hidden_size)
         return layer_2_out
 
-class PPOPolicy(nn.Module):
-    def __init__(self, num_outputs):
-        nn.Module.__init__(self)
-        self.policy_param = PolicyParam
+class Feature_Net(nn.Module):
+    def __init__(self):
+
+        super().__init__()
         self.sur_feature_net = TimeVecFeatureNet(70, 5, 128)
         self.ego_feature_net = TimeVecFeatureNet(8, 5, 128)
         self.feature_net = nn.Sequential(
                            orthogonal_init_(nn.Linear(256, 256)), 
                            nn.ReLU())
+    
+    def forward(self, sur_obs, ego_obs):
+
+        ego_feature = self.ego_feature_net(ego_obs)
+        sur_feature = self.sur_feature_net(sur_obs)
+        env_feature = torch.concat([ego_feature, sur_feature], dim=1)
+        env_feature = self.feature_net(env_feature)
+
+        return env_feature
+
+class PPOPolicy(nn.Module):
+    def __init__(self, num_outputs):
+        nn.Module.__init__(self)
+        self.policy_param = PolicyParam
+        self.share_net = self.policy_param.share
+        self.independent_std = self.policy_param.independent_std
+        # actor and critic share the feature network 
+        if self.share_net:
+            self.feature_net = Feature_Net()
+        else:
+            self.actor_feature_net = Feature_Net()
+            self.critic_feature_net = Feature_Net()
         # orthogonal_init trick
         #initialization of weights with scaling np.sqrt(2), and the biases are set to 0
         # the policy output layer weights are initialized with the scale of 0.01
-        self.actor_net = nn.Sequential(
-            OrderedDict(
-                [
-                    ("actor_1", orthogonal_init_(nn.Linear(256, 256))),
-                    ("actor_relu_1", nn.ReLU()),
-                    ("actor_mu", orthogonal_init_(nn.Linear(256, num_outputs), gain=0.01)),
-                ]
+        if self.independent_std:
+            self.actor_net = nn.Sequential(
+                OrderedDict(
+                    [
+                        ("actor_1", orthogonal_init_(nn.Linear(256, 256))),
+                        ("actor_relu_1", nn.ReLU()),
+                        ("actor_mu", orthogonal_init_(nn.Linear(256, num_outputs), gain=0.01)),
+                    ]
+                )
             )
-        )
+            # std is independent of the states
+            self.log_std = torch.nn.Parameter(torch.zeros(num_outputs), requires_grad=True)
+        else:
+            self.actor_net = nn.Sequential(
+                OrderedDict(
+                    [
+                        ("actor_1", orthogonal_init_(nn.Linear(256, 256))),
+                        ("actor_relu_1", nn.ReLU()),
+                        ("actor_mu", orthogonal_init_(nn.Linear(256, num_outputs*2), gain=0.01)),
+                    ]
+                )
+            )
 
         self.critic_net = nn.Sequential(
             OrderedDict(
@@ -95,8 +130,6 @@ class PPOPolicy(nn.Module):
             )
         )
 
-        # std is independent of the states (empirically better)
-        self.log_std = torch.nn.Parameter(torch.zeros(num_outputs), requires_grad=True)
         self.sur_obs_norm = Normalization(70)
         self.ego_obs_norm = Normalization(8)
 
@@ -104,16 +137,21 @@ class PPOPolicy(nn.Module):
         
         ego_obs = torch.clamp(self.ego_obs_norm.normalize(ego_obs), min=-5, max=5)
         sur_obs = torch.clamp(self.sur_obs_norm.normalize(sur_obs), min=-5, max=5)
-        ego_feature = self.ego_feature_net(ego_obs)
-        sur_feature = self.sur_feature_net(sur_obs)
-        env_feature = torch.concat([ego_feature, sur_feature], dim=1)
-        env_feature = self.feature_net(env_feature)
-
+        if self.share_net:
+            env_feature = self.feature_net(sur_obs, ego_obs)
+        else:
+            actor_env_feature = self.actor_feature_net(sur_obs, ego_obs)
+            critic_env_feature = self.critic_feature_net(sur_obs, ego_obs)
+            env_feature = dict(actor_env_feature=actor_env_feature, 
+                               critic_env_feature=critic_env_feature)
         return env_feature
 
     def get_value(self, env_feature):
-
-        values = self.critic_net(env_feature)
+        
+        if type(env_feature) == dict:
+            values = self.critic_net(env_feature['critic_env_feature'])
+        else:
+            values = self.critic_net(env_feature)
 
         return values
 
@@ -123,11 +161,21 @@ class PPOPolicy(nn.Module):
         self.ego_obs_norm.update(ego_obs)
     
     def select_action(self, sur_obs, ego_obs, deterministic=False):
-
+        
         env_feature = self.get_env_feature(sur_obs, ego_obs)
-        action_mean = self.actor_net(env_feature)
-        value = self.critic_net(env_feature)
-        action_std = torch.exp(self.log_std)
+        if type(env_feature) == dict:
+            action_out = self.actor_net(env_feature['actor_env_feature'])
+            value = self.critic_net(env_feature['critic_env_feature'])
+        else:
+            action_out = self.actor_net(env_feature)
+            value = self.critic_net(env_feature)
+        if self.independent_std:
+            action_mean = action_out 
+            action_std = torch.exp(self.log_std)
+        else:
+            action_mean, log_std = torch.chunk(action_out, 2, dim=-1)
+            action_std = torch.exp(log_std)
+
         action_distribution = Normal(action_mean, action_std)
         # 采样
         if not deterministic:
@@ -152,9 +200,17 @@ class PPOPolicy(nn.Module):
         if not gussian:
             from utils.util import TanhBijector
             actions = TanhBijector.inverse(actions) 
-
-        action_mean = self.actor_net(env_feature)
-        action_std = torch.exp(self.log_std)
+        if type(env_feature) == dict:
+            action_out = self.actor_net(env_feature['actor_env_feature'])
+        else:
+            action_out = self.actor_net(env_feature)
+        if self.independent_std:
+            action_mean = action_out 
+            action_std = torch.exp(self.log_std)
+        else:
+            action_mean, log_std = torch.chunk(action_out, 2, dim=-1)
+            action_std = torch.exp(log_std)
+            
         action_distribution = Normal(action_mean, action_std)
         logp_pi = self._cal_tanhlogproba(action_distribution, actions)
 

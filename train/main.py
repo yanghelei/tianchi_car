@@ -15,21 +15,22 @@ import torch.optim as opt
 import sys
 sys.path.append(os.path.split(os.path.dirname(os.path.abspath(__file__)))[0] + '/')
 from utils.norm import Normalization 
-from tensorboardX import SummaryWriter
 from train.config import PolicyParam, CommonConfig
 from train.policy import PPOPolicy
 from train.workers import MemorySampler
 from geek.env.logger import Logger
-from geek.env.matrix_env import DoneReason
 from ai_hub.notice import notice
 from ai_hub import Logger as Writer
 logger = Logger.get_logger(__name__)
 
 class MulProPPO:
-    def __init__(self, logger) -> None:
+    def __init__(self, logger, task_name, load):
         self.args = PolicyParam
         self.logger = logger
         self.global_sample_size = 0
+        self.task_name = task_name
+        self.load = load
+
         self._make_dir()
 
         torch.manual_seed(self.args.seed)
@@ -39,23 +40,21 @@ class MulProPPO:
 
         self.sampler = MemorySampler(self.args, self.logger)
         self.model = PPOPolicy(2).to(self.args.device)
+        if load:
+            self._load_model(self.args.model_path)
+            self.logger.info('Successfully load pre-trained model ')
         self.optimizer = opt.Adam(self.model.parameters(), lr=self.args.lr)
         if self.args.use_value_norm:
             self.value_norm = Normalization(1, device = self.args.device)
 
         self.clip_now = self.args.clip
         self.start_episode = 0
-        self._load_model(self.args.model_path)
         self.start_time = time.time()
 
     def _load_model(self, model_path: str = None):
         if not model_path:
             return
-        pretrained_dict = torch.load(
-            model_path, map_location=lambda storage, loc: storage.cuda(self.args.device)
-        )
-        if self._check_keys(self.model, pretrained_dict):
-            self.model.load_state_dict(pretrained_dict, strict=False)
+        self.model.load_state_dict(torch.load(model_path, map_location=self.args.device))
 
     def _check_keys(self, model, pretrained_state_dict):
         ckpt_keys = set(pretrained_state_dict.keys())
@@ -315,7 +314,7 @@ class MulProPPO:
 
     def train(self):
         nc = notice("oWbT458Ya1xKsC1d_E_RXWf0MNos")
-        nc.task_complete_notice(task_name="Training", task_progree="training Started.")
+        nc.task_complete_notice(task_name="Training", task_progree=f"training Started {self.task_name}.")
         best_reward = -np.inf
 
         for i_episode in range(self.args.num_episode):
@@ -331,13 +330,15 @@ class MulProPPO:
             info['lr_now'] = lr_now
             info['lr_iteration_reduce'] = lr_iteration_reduce
             # log 
-            if i_episode % self.args.log_num_episode == 0:
+            if i_episode % self.args.log_num_episode == 0 or i_episode == (self.args.num_episode-1):
                 self.logger.info(
                 "----------------------" + str(i_episode) + "-------------------------"
                                 ) 
                 self.log(memory, batch.reward, info, i_episode)
                 
-            if i_episode % self.args.eval_interval == 0 and self.args.use_eval:
+            if i_episode % self.args.eval_interval == 0 \
+                or i_episode == (self.args.num_episode-1) \
+                and self.args.use_eval:
                 memory = self.sampler.eval(self.model, self.args.eval_episode)
                 batch = memory.sample()
                 mean_reward = np.sum(batch.reward) / memory.num_episode
@@ -358,7 +359,8 @@ class MulProPPO:
                 self.writer.scalar_summary('Eval Successs Rate', reach_goal_rate, i_episode)
                 self.writer.scalar_summary('Eval Mean Reward', mean_reward, i_episode)
                 self.writer.scalar_summary('Eval Mean Step', mean_step, i_episode)
-                
+                nc = notice("oWbT458Ya1xKsC1d_E_RXWf0MNos")
+                nc.task_complete_notice(task_name="Training", task_progree=f"{self.task_name} training {i_episode}")
                 self.writer.show('Eval Successs Rate')
                 self.writer.show('Eval Mean Reward')
                 self.writer.show('Eval Mean Step')
@@ -370,7 +372,9 @@ class MulProPPO:
                 self.writer.show('entropy_loss')
                 self.writer.show('mean_step')
 
-            if i_episode % self.args.save_num_episode == 0 and i_episode > self.args.random_episode:
+            if i_episode % self.args.save_num_episode == 0 \
+                and i_episode > self.args.random_episode \
+                or i_episode == (self.args.num_episode-1):
                 torch.save(
                     self.model.state_dict(), self.model_dir + "network.pth"
                 )
@@ -390,9 +394,14 @@ class MulProPPO:
         self.sampler.close()
 
 if __name__ == "__main__":
+    import argparse 
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--task_name', type=str, default='Base_PPO')
+    parser.add_argument('--load', action='store_true', default=False)
+    args = parser.parse_args()
     remote_path = CommonConfig.remote_path
     os.makedirs(remote_path, exist_ok=True)
     # os.environ["OMP_NUM_THREADS"] = "1"  # Necessary for multithreading.
     torch.set_num_threads(1)
-    mpp = MulProPPO(logger=logger)
+    mpp = MulProPPO(logger, args.task_name, args.load)
     mpp.train()
