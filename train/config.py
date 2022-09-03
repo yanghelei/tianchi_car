@@ -30,7 +30,7 @@ class PolicyParam():
     else:
         num_workers: int = 12
         random_episode: int = 20
-        num_episode: int = 1200
+        num_episode: int = 1000
         batch_size: int =  4196
         minibatch_size: int = 256
         num_epoch: int = 3
@@ -41,7 +41,7 @@ class PolicyParam():
     use_clipped_value_loss: bool = True
     use_value_norm: bool = True
     use_clip_grad: bool = True
-    share: bool = False
+    share: bool = True
     independent_std: bool = True
 
     # schedule

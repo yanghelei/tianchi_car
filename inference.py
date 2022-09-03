@@ -32,6 +32,8 @@ high_action = CommonConfig.env_action_space.high
 low_action = CommonConfig.env_action_space.low
 def run(worker_index):
     try:
+        reach_goal = 0
+        episode = 0
         logger.info(f'worker {worker_index} starting')
         env = gym.make("MatrixEnv-v1", scenarios=Scenarios.INFERENCE, render_id=worker_index)
         obs = env.reset()
@@ -54,8 +56,12 @@ def run(worker_index):
                 break
             if done :
                 obs = env.reset()
+                episode += 1
                 env_post_processer.reset(obs)
-                logger.info(f"env rest")
+                if info['reached_stoparea']:
+                    logger.info(f"succeed !")
+                    reach_goal += 1
+                    logger.info(f'{worker_index}, reach_goal_rate:{reach_goal}/{episode}')
             env_state = env_post_processer.assemble_surr_vec_obs(obs)
             vec_state = env_post_processer.assemble_ego_vec_obs(obs)
     except Exception as e:
