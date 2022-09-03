@@ -16,7 +16,7 @@ import sys
 sys.path.append(os.path.split(os.path.dirname(os.path.abspath(__file__)))[0] + '/')
 from utils.norm import Normalization 
 from train.config import PolicyParam, CommonConfig
-from train.policy import PPOPolicy
+from train.policy import PPOPolicy, CategoricalPPOPolicy
 from train.workers import MemorySampler
 from geek.env.logger import Logger
 from ai_hub.notice import notice
@@ -39,7 +39,10 @@ class MulProPPO:
             torch.cuda.manual_seed(self.args.seed)
 
         self.sampler = MemorySampler(self.args, self.logger)
-        self.model = PPOPolicy(2).to(self.args.device)
+        if self.args.gaussian:
+            self.model = PPOPolicy(2).to(self.args.device)
+        else:
+            self.model = CategoricalPPOPolicy(CommonConfig.action_num).to(self.args.device)
         if load:
             self._load_model(self.args.model_path)
             self.logger.info('Successfully load pre-trained model ')
@@ -108,12 +111,12 @@ class MulProPPO:
 
         return loss_value
 
-    def cal_pi_loss(self, oldlogproba, env_state, gussain_actions, advantages):
+    def cal_pi_loss(self, oldlogproba, env_state, actions, advantages):
 
-        minibatch_newlogproba = self.model.eval(
-            env_state, gussain_actions
+        minibatch_newlogproba, minibatch_entropy = self.model.eval(
+            env_state, actions
         )                
-        loss_entropy = minibatch_newlogproba.mean() # this is -entropy
+        loss_entropy = -minibatch_entropy # this is -entropy
         assert oldlogproba.shape == minibatch_newlogproba.shape
         log_ratio = minibatch_newlogproba - oldlogproba
         ratio = torch.exp(log_ratio)
@@ -191,11 +194,18 @@ class MulProPPO:
                                             / (minibatch_advantages.std() + self.args.EPS)
                 minibatch_returns = returns[minibatch_ind]
 
-                loss_surr, loss_entropy, approx_kl = self.cal_pi_loss(
-                                                        minibatch_oldlogproba, 
-                                                        minibatch_env_state, 
-                                                        minibatch_gussain_actions, 
-                                                        minibatch_advantages)
+                if self.args.gaussian:
+                    loss_surr, loss_entropy, approx_kl = self.cal_pi_loss(
+                                                            minibatch_oldlogproba, 
+                                                            minibatch_env_state, 
+                                                            minibatch_gussain_actions, 
+                                                            minibatch_advantages)
+                else:
+                    loss_surr, loss_entropy, approx_kl = self.cal_pi_loss(
+                                                            minibatch_oldlogproba, 
+                                                            minibatch_env_state, 
+                                                            minibatch_actions, 
+                                                            minibatch_advantages)
 
                 loss_value = self.cal_value_loss(minibatch_env_state, 
                                                  minibatch_values, 

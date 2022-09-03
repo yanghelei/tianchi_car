@@ -19,6 +19,7 @@ class PolicyParam():
     debug = False
     use_eval = True
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
+    gaussian = False # 动作是否连续
 
     if debug:
         num_workers = 1
@@ -86,3 +87,4 @@ class CommonConfig:
 
     remote_path = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'gaussian_ppo_v2')
     env_action_space = Box(low=np.array([-0.3925, -2.0]), high=np.array([0.3925, 2.0]), dtype=np.float32)
+    action_num = 121

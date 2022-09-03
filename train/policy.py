@@ -14,6 +14,7 @@ from train.config import PolicyParam
 from utils.util import orthogonal_init_
 import numpy as np 
 from torch.distributions.normal import Normal
+from torch.distributions import Categorical
 from utils.norm import Normalization
 
 class CnnFeatureNet(nn.Module):
@@ -185,6 +186,12 @@ class PPOPolicy(nn.Module):
         logproba = self._cal_tanhlogproba(action_distribution, gaussian_action)
         # 裁剪到[-1, 1]
         tanh_action = torch.tanh(gaussian_action)
+
+        tanh_action = tanh_action.data.cpu().numpy()[0]
+        logproba = logproba.data.cpu().numpy()[0]
+        value = value.data.cpu().numpy()[0][0]
+        gaussian_action = gaussian_action.data.cpu().numpy()[0]
+        
         return tanh_action, gaussian_action, logproba, value
 
     @staticmethod
@@ -213,8 +220,111 @@ class PPOPolicy(nn.Module):
             
         action_distribution = Normal(action_mean, action_std)
         logp_pi = self._cal_tanhlogproba(action_distribution, actions)
+        entropy = -logp_pi.mean()
 
-        return logp_pi
+        return logp_pi, entropy
+
+    def load_model(self, model_path, device):
+        self.load_state_dict(torch.load(model_path, map_location=device))
+
+        
+class CategoricalPPOPolicy(nn.Module):
+    def __init__(self, num_outputs):
+        nn.Module.__init__(self)
+        self.policy_param = PolicyParam
+        self.share_net = self.policy_param.share
+        # actor and critic share the feature network 
+        if self.share_net:
+            self.feature_net = Feature_Net()
+        else:
+            self.actor_feature_net = Feature_Net()
+            self.critic_feature_net = Feature_Net()
+
+        self.actor_net = nn.Sequential(
+            OrderedDict(
+                [
+                    ("actor_1", orthogonal_init_(nn.Linear(256, 256))),
+                    ("actor_relu_1", nn.ReLU()),
+                    ("actor_mu", orthogonal_init_(nn.Linear(256, num_outputs), gain=0.01)),
+                ]
+            )
+        )
+
+        self.critic_net = nn.Sequential(
+            OrderedDict(
+                [
+                    ("critic_1", orthogonal_init_(nn.Linear(256, 256))),
+                    ("critic_relu_1", nn.ReLU()),
+                    ("critic_output", orthogonal_init_(nn.Linear(256, 1))),
+                ]
+            )
+        )
+
+        self.sur_obs_norm = Normalization(70)
+        self.ego_obs_norm = Normalization(8)
+
+    def get_env_feature(self, sur_obs, ego_obs):
+        
+        ego_obs = torch.clamp(self.ego_obs_norm.normalize(ego_obs), min=-5, max=5)
+        sur_obs = torch.clamp(self.sur_obs_norm.normalize(sur_obs), min=-5, max=5)
+        if self.share_net:
+            env_feature = self.feature_net(sur_obs, ego_obs)
+        else:
+            actor_env_feature = self.actor_feature_net(sur_obs, ego_obs)
+            critic_env_feature = self.critic_feature_net(sur_obs, ego_obs)
+            env_feature = dict(actor_env_feature=actor_env_feature, 
+                               critic_env_feature=critic_env_feature)
+        return env_feature
+
+
+    def get_value(self, env_feature):
+
+        if type(env_feature) == dict:
+            values = self.critic_net(env_feature['critic_env_feature'])
+        else:
+            values = self.critic_net(env_feature)
+
+        return values
+
+    def update_norm(self, sur_obs, ego_obs):
+        
+        self.sur_obs_norm.update(sur_obs)
+        self.ego_obs_norm.update(ego_obs)
+    
+    def select_action(self, sur_obs, ego_obs, deterministic=False):
+
+        # 归一化
+        env_feature = self.get_env_feature(sur_obs, ego_obs)
+        if type(env_feature) == dict:
+            action_out = self.actor_net(env_feature['actor_env_feature'])
+            value = self.critic_net(env_feature['critic_env_feature'])
+        else:
+            action_out = self.actor_net(env_feature)
+            value = self.critic_net(env_feature)
+            
+        action_distribution = Categorical(logits=action_out)
+        # 采样
+        if not deterministic:
+            action = action_distribution.sample()
+        else:
+            action = torch.argmax(action_out)
+            
+        logproba = action_distribution.log_prob(action)
+
+        return action.cpu().numpy(), np.zeros(1), logproba.cpu().numpy()[0], value.cpu().numpy()[0]
+
+    def eval(self, env_feature, actions):
+
+        if type(env_feature) == dict:
+            action_out = self.actor_net(env_feature['actor_env_feature'])
+        else:
+            action_out = self.actor_net(env_feature)
+            
+        action_distribution = Categorical(logits=action_out)
+        logp_pi = action_distribution.log_prob(actions.view(-1))
+        entropy = action_distribution.entropy().mean()
+
+        return logp_pi, entropy
 
     def load_model(self, model_path, device):
         self.load_state_dict(torch.load(model_path, map_location=device))

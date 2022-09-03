@@ -17,6 +17,7 @@ from train.config import CommonConfig
 from geek.env.logger import Logger
 from geek.env.matrix_env import Scenarios, DoneReason
 from train.tools import EnvPostProcsser
+from train.config import PolicyParam
 
 Transition = namedtuple(
     "Transition",
@@ -69,9 +70,12 @@ class EnvWorker(mp.Process):
         self.remote = remote
         self.queue = queue
         self.lock = lock
-
+        self.gaussian = PolicyParam.gaussian
         self.env_post_processer = EnvPostProcsser()
         self.env_action_space = CommonConfig.env_action_space
+        self.action_num =  CommonConfig.action_num
+        if not self.gaussian:
+            self.actions_map = self._set_actions_map(121)
         torch.manual_seed(seed)
         np.random.seed(seed)
     
@@ -79,14 +83,25 @@ class EnvWorker(mp.Process):
     def lmap(v: float, x: List, y: List) -> float:
         return y[0] + (v - x[0]) * (y[1] - y[0]) / (x[1] - x[0])
 
-    def action_transform(self, action) -> np.array :
+    def _set_actions_map(self, action_num):
+        #dicretise action space
+        forces = np.linspace(-2, 2, num=int(np.sqrt(action_num)), endpoint=True)
+        thetas = np.linspace(-0.3925, 0.3925, num=int(np.sqrt(action_num)), endpoint=True)
+        actions = [[force, theta] for force in forces for theta in thetas]
+        actions_map = {i:actions[i] for i in range(action_num)}
+        return actions_map 
 
-        low_action = self.env_action_space.low
-        high_action = self.env_action_space.high
-        steer = self.lmap(action[0],[-1.0, 1.0],[low_action[0], high_action[0]],)
-        acc = self.lmap(action[1], [-1.0, 1.0], [low_action[1], high_action[1]])
+    def action_transform(self, action, gaussian=True) -> np.array :
+        if gaussian:
+            low_action = self.env_action_space.low
+            high_action = self.env_action_space.high
+            steer = self.lmap(action[0],[-1.0, 1.0],[low_action[0], high_action[0]],)
+            acc = self.lmap(action[1], [-1.0, 1.0], [low_action[1], high_action[1]])
+            env_action = np.array([steer, acc])
+        else:
+            env_action = np.array(self.actions_map[action.item()])
 
-        return np.array([steer, acc])
+        return env_action
 
     def run(self):
         self.env = make_env(self.worker_index)
@@ -102,14 +117,13 @@ class EnvWorker(mp.Process):
                         while Get_Enough_Batch.value == 0:
                             with torch.no_grad():
                                 action, gaussian_action, logproba, value = policy.select_action(env_state, vec_state)
-                                action = action.data.cpu().numpy()[0]
-                                logproba = logproba.data.cpu().numpy()[0]
-                                value = value.data.cpu().numpy()[0][0]
-                                gaussian_action = gaussian_action.data.cpu().numpy()[0]
                                 env_state = env_state.data.cpu().numpy()[0]
                                 vec_state = vec_state.data.cpu().numpy()[0]
                             # 映射到环境动作
-                            env_action = self.action_transform(gaussian_action)
+                            if self.gaussian:
+                                env_action = self.action_transform(gaussian_action)
+                            else:
+                                env_action = self.action_transform(action, False)
                             obs, reward, done, info = self.env.step(env_action)
                             is_runtime_error = info.get(DoneReason.Runtime_ERROR, False)
                             is_infer_error = info.get(DoneReason.INFERENCE_DONE, False)
@@ -143,14 +157,13 @@ class EnvWorker(mp.Process):
                         while Get_Enough_Batch.value == 0:
                             with torch.no_grad():
                                 action, gaussian_action, logproba, value = policy.select_action(env_state, vec_state, True)
-                                action = action.data.cpu().numpy()[0]
-                                logproba = logproba.data.cpu().numpy()[0]
-                                value = value.data.cpu().numpy()[0][0]
-                                gaussian_action = gaussian_action.data.cpu().numpy()[0]
                                 env_state = env_state.data.cpu().numpy()[0]
                                 vec_state = vec_state.data.cpu().numpy()[0]
                             # 映射到环境动作
-                            env_action = self.action_transform(gaussian_action)
+                            if self.gaussian:
+                                env_action = self.action_transform(gaussian_action)
+                            else:
+                                env_action = self.action_transform(action, False)
                             obs, reward, done, info = self.env.step(env_action)
                             # 出现error则则放弃本回合的数据
                             if DoneReason.INFERENCE_DONE == info.get("DoneReason", ""):
