@@ -44,7 +44,7 @@ config = dict(
     training_num=14,  # 用于训练的环境数目
     test_num=20,  # the number of episodes for one policy evaluation
 
-    logdir='/myspace/rainbow_v2.1',
+    logdir='/myspace/rainbow_v2.2',
     render=0.0,
 
     prioritized_replay=True,
@@ -59,14 +59,15 @@ config = dict(
 
     # action_low=np.array([-pi / 4.0, -0.88]),
     # action_high=np.array([pi / 4.0, 0.88]),
-    steer_prime_choices=np.linspace(-pi/3.6, pi/3.6, 11),
-    acc_prime_choice=np.array([-0.88, 0, 0.88]),
-    action_per_dim=(11, 3),
+    action_mask=[],  # 速度 → 限制acc ; 车辆朝向限幅 → 限制 steer
+    steer_prime_choices=np.linspace(-pi/9, pi/9, 5),
+    acc_prime_choice=np.array([-0.8, 0, 0.8]),
+    action_per_dim=(5, 3),
 
     network=dict(
-        sur_dim=7,
+        sur_dim=9,
         sur_hidden=128,
-        ego_dim=10,
+        ego_dim=11,
         ego_hidden=64,
         total_hidden=256,
         action_hidden=(256, 128),
@@ -82,5 +83,5 @@ cfg = EasyDict(config)
 
 
 if __name__ == '__main__':
-    a = np.linspace(-pi/3.6, pi/3.6, 11)
+    a = np.linspace(-pi/3.6, pi/3.6, 11)  # 好像还是有点大
     print(a/pi * 180 * 0.1)
