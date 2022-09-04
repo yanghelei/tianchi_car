@@ -348,7 +348,7 @@ class Processor:
             high_speed_reward = 0
 
         if current_lane_index != -1:
-            offset_reward = 3 / (current_offset + 1)
+            offset_reward = 0.3 / (current_offset + 1)
         else:
             offset_reward = 0
 
