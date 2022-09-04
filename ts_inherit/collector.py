@@ -255,7 +255,7 @@ class MyCollector(Collector):
             rew_mean = rew_std = len_mean = len_std = 0
 
         if hasattr(self, 'train_logger'):
-            self.train_logger.info(f'Collector collected: {episode_count} episodes with {step_count} transitions\tCost:{max(time.time() - start_time, 1e-9)}s')
+            self.train_logger.info(f'Collector collected: {episode_count} episodes with {step_count} transitions\tCost:{round(max(time.time() - start_time, 1e-9), 2)}s')
         if hasattr(self, 'test_logger'):
             self.test_logger.info(f'Reach goal rate: {reach_goal}/{episode_count} \tCollision rate:{collision}/{episode_count} \tTimeout rate:{time_out}/{episode_count}')
 
