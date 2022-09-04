@@ -164,7 +164,6 @@ class Processor:
 
         lane_list = []
 
-        speed_limit = 33.33
         if observation["map"] is not None:
             for lane_info in observation["map"].lanes:
                 lane_list.append(lane_info.lane_id)
@@ -175,6 +174,7 @@ class Processor:
         else:  # 按照主办方的说法，车开到道路外有可能出现 none 的情况
             current_lane_index = -1.0
             current_offset = 0.0
+            speed_limit = 0.0
 
             # self.logger.info('Env:' + str(env_id) + '\tobs[\'map\'] is None in get_observation(obs)!!!\tUse -1 as lane_index and 0.0 offset as to keep running!')
 
@@ -231,9 +231,9 @@ class Processor:
             acc_prime_mask = self.action_library[:, 1] < 0  # 速度太快，屏蔽继续加速的动作
         else:
             acc_prime_mask = np.ones((len(self.action_library), ), dtype=np.bool_)
-        if curr_steer < -pi/18:  # 前轮左转大于10°，屏蔽继续左转的动作
+        if curr_steer < -pi/36:  # 前轮左转大于5°，屏蔽继续左转的动作
             steer_prime_mask = self.action_library[:, 0] > 0
-        elif curr_steer > pi/18:  # 前轮右转大于10°，屏蔽继续右转的动作
+        elif curr_steer > pi/36:  # 前轮右转大于5°，屏蔽继续右转的动作
             steer_prime_mask = self.action_library[:, 0] < 0
         else:
             steer_prime_mask = np.ones((len(self.action_library), ), dtype=np.bool_)
@@ -341,7 +341,7 @@ class Processor:
             speed_limit = 0.0
             # self.logger.info('Env:' + str(env_id) + 'next_obs[\'map\'] is None!!!\tUse inf as speed limit to keep running!')
         car_speed = car_status[3]  # 当前车速
-        if car_speed > speed_limit:
+        if car_speed > speed_limit or car_speed < speed_limit * 0.3:  # 当前车速超过车道限速或者小于车道限速的30%
             over_speed = True
             high_speed_reward = -15
         else:
