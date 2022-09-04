@@ -51,6 +51,7 @@ class MyLogger(TensorboardLogger):
         if save_checkpoint_fn and epoch - self.last_save_step >= self.save_interval:
             self.last_save_step = epoch
             save_checkpoint_fn(epoch, env_step, gradient_step)
+            self.logger.info(f"----------------Saved Check Point - Epoch: {epoch} - Env step: {env_step}----------------")
             self.write("save/epoch", epoch, {"save/epoch": epoch})
             self.write("save/env_step", env_step, {"save/env_step": env_step})
             self.write(

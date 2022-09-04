@@ -42,7 +42,12 @@ def make_test_env(cfgs):
 
 def train(cfgs):
     train_envs = SubprocVectorEnv([lambda i=_i: make_train_env(cfgs, i) for _i in range(cfgs.training_num)])
-    test_envs = DummyVectorEnv([lambda i=_i: make_train_env(cfgs, 'test_'+str(i)) for _i in range(15-cfgs.training_num)])
+
+    n_test_envs = 15-cfgs.training_num
+    if n_test_envs > 0:
+        test_envs = DummyVectorEnv([lambda i=_i: make_train_env(cfgs, 'test_'+str(i)) for _i in range(n_test_envs)])
+    else:
+        test_envs = None
 
     set_seed(seed=cfgs.seed)
 
@@ -87,13 +92,21 @@ def train(cfgs):
     logger.logger.info('device: ' + str(cfgs.device))
 
     train_processor = Processor(cfgs, net, logger.logger, n_env=cfgs.training_num)
-    test_processor = Processor(cfgs, net, logger.logger, n_env=15-cfgs.training_num, update_norm=False)
+
+    if test_envs is not None:
+        test_processor = Processor(cfgs, net, logger.logger, n_env=15-cfgs.training_num, update_norm=False)
+    else:
+        test_processor = None
 
     # collector
     train_collector = MyCollector(policy, train_envs, buf, preprocess_fn=train_processor.preprocess_fn, exploration_noise=True)
     train_collector.set_logger(logger.logger, type='train')
-    test_collector = MyCollector(policy, test_envs, preprocess_fn=test_processor.preprocess_fn, exploration_noise=False)
-    test_collector.set_logger(logger.logger)
+
+    if test_processor is not None:
+        test_collector = MyCollector(policy, test_envs, preprocess_fn=test_processor.preprocess_fn, exploration_noise=False)
+        test_collector.set_logger(logger.logger)
+    else:
+        test_collector = None
 
     # policy logger
     policy.set_logger(logger.logger)
@@ -159,7 +172,7 @@ def train(cfgs):
     result = my_policy_trainer(
         policy=policy,
         train_collector=train_collector,
-        test_collector=test_collector,
+        test_collector=test_collector,  # 测试相关
         max_epoch=cfgs.epoch,
         step_per_epoch=cfgs.step_per_epoch,
         step_per_collect=cfgs.step_per_collect,

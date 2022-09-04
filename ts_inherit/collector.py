@@ -14,6 +14,8 @@ from tianshou.data import (
     to_numpy,
 )
 
+from rainbow.config import cfg
+
 
 class MyCollector(Collector):
 
@@ -232,7 +234,7 @@ class MyCollector(Collector):
 
             self.data.obs = self.data.obs_next
 
-            if (n_step and step_count >= n_step and episode_count >= 14) or (n_episode and episode_count >= n_episode):
+            if (n_step and step_count >= n_step and episode_count >= cfg.training_num) or (n_episode and episode_count >= n_episode):
                 break
 
         # generate statistics

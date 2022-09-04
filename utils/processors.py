@@ -333,12 +333,12 @@ class Processor:
             current_lane_index = lane_list.index(next_obs["map"].lane_id)
             current_offset = next_obs["map"].lane_offset
             if speed_limit is None:
-                speed_limit = inf
+                speed_limit = 0.0
                 # self.logger.info('Env:' + str(env_id) + 'Not find current lane\'s speed limit!!!\tUse inf to keep running!')
         else:  # 按照主办方的说法，车开到道路外有可能出现 none 的情况
             current_lane_index = -1.0
             current_offset = 0.0
-            speed_limit = inf
+            speed_limit = 0.0
             # self.logger.info('Env:' + str(env_id) + 'next_obs[\'map\'] is None!!!\tUse inf as speed limit to keep running!')
         car_speed = car_status[3]  # 当前车速
         if car_speed > speed_limit:
@@ -348,7 +348,7 @@ class Processor:
             high_speed_reward = 0
 
         if current_lane_index != -1:
-            offset_reward = 0.3 / (current_offset + 1)
+            offset_reward = 0.3 / (abs(current_offset) + 1)
         else:
             offset_reward = 0
 
