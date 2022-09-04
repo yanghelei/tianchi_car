@@ -31,7 +31,7 @@ config = dict(
 
     noisy_std=0.1,
     n_step=5,  # the number of steps to look ahead. Default to 1.
-    target_update_freq=3e3,  # v1.2: 2e4  v1.3: 2.8e3     v1.4: 1.4e3
+    target_update_freq=2e3,  # v1.2: 2e4  v1.3: 2.8e3     v1.4: 1.4e3
 
     epoch=1e7,
     step_per_epoch=7000,  # the number of transitions collected per epoch
@@ -44,7 +44,7 @@ config = dict(
     training_num=14,  # 用于训练的环境数目
     test_num=20,  # the number of episodes for one policy evaluation
 
-    logdir='/myspace/rainbow_v2.2',
+    logdir='/myspace/rainbow_v2.2.1',
     render=0.0,
 
     prioritized_replay=True,
@@ -60,9 +60,9 @@ config = dict(
     # action_low=np.array([-pi / 4.0, -0.88]),
     # action_high=np.array([pi / 4.0, 0.88]),
     action_mask=[],  # 速度 → 限制acc ; 车辆朝向限幅 → 限制 steer
-    steer_prime_choices=np.linspace(-pi/9, pi/9, 5),
+    steer_prime_choices=np.array([-pi/18, 0, pi/18]),  # np.linspace(-pi/18, pi/18, 3)
     acc_prime_choice=np.array([-0.8, 0, 0.8]),
-    action_per_dim=(5, 3),
+    action_per_dim=(3, 3),
 
     network=dict(
         sur_dim=9,

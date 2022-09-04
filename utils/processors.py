@@ -322,16 +322,22 @@ class Processor:
             扣分: 15分每次，最高30
             TODO: 全程平均车速尚未考虑
         """
+        lane_list = []
         if next_obs["map"] is not None:
             speed_limit = None
             for lane_info in next_obs["map"].lanes:
+                lane_list.append(lane_info.lane_id)
                 if next_obs["map"].lane_id == lane_info.lane_id:
                     speed_limit = lane_info.speed_limit
                     break
+            current_lane_index = lane_list.index(next_obs["map"].lane_id)
+            current_offset = next_obs["map"].lane_offset
             if speed_limit is None:
                 speed_limit = inf
                 # self.logger.info('Env:' + str(env_id) + 'Not find current lane\'s speed limit!!!\tUse inf to keep running!')
         else:  # 按照主办方的说法，车开到道路外有可能出现 none 的情况
+            current_lane_index = -1.0
+            current_offset = 0.0
             speed_limit = inf
             # self.logger.info('Env:' + str(env_id) + 'next_obs[\'map\'] is None!!!\tUse inf as speed limit to keep running!')
         car_speed = car_status[3]  # 当前车速
@@ -341,12 +347,15 @@ class Processor:
         else:
             high_speed_reward = 0
 
-        # rule_reward = brake_reward + turn_reward + high_speed_reward
+        if current_lane_index != -1:
+            offset_reward = 3 / (current_offset + 1)
+        else:
+            offset_reward = 0
 
         if fastly_brake or big_turn or over_speed:
             rule_reward = brake_reward + turn_reward + high_speed_reward
         else:
-            rule_reward = distance_close * 0.5
+            rule_reward = distance_close * 0.5 + offset_reward
 
         if info["collided"]:  # 碰撞
             end_reward = -100
