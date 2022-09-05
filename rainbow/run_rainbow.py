@@ -121,20 +121,20 @@ def train(cfgs):
     def save_checkpoint_fn(epoch, env_step, gradient_step):
         # see also: https://pytorch.org/tutorials/beginner/saving_loading_models.html
         ckpt_path = os.path.join(log_path, "checkpoint.pth")
-        torch.save({"model": policy.state_dict(), "optim": optim.state_dict(), }, ckpt_path)
+        torch.save(policy.state_dict(), ckpt_path)
         buffer_path = os.path.join(log_path, "train_buffer.pkl")
         pickle.dump(train_collector.buffer, open(buffer_path, "wb"))
         return ckpt_path
 
     if cfgs.resume:
         # load from existing checkpoint
-        logger.logger.info(f"Loading agent under {log_path}")
-        ckpt_path = os.path.join(log_path, "checkpoint.pth")
-        if os.path.exists(ckpt_path):
-            policy.load_state_dict(torch.load(ckpt_path, map_location=cfgs.device))
-            logger.logger.info("Successfully restore policy and optim.")
-        else:
-            logger.logger.info("Fail to restore policy and optim.")
+        # logger.logger.info(f"Loading agent under {log_path}")
+        # ckpt_path = os.path.join(log_path, "checkpoint.pth")
+        # if os.path.exists(ckpt_path):
+        #     policy.load_state_dict(torch.load(ckpt_path, map_location=cfgs.device))
+        #     logger.logger.info("Successfully restore policy and optim.")
+        # else:
+        #     logger.logger.info("Fail to restore policy and optim.")
 
         buffer_path = os.path.join(log_path, "train_buffer.pkl")
         if os.path.exists(buffer_path):
