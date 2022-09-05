@@ -99,13 +99,7 @@ def train(cfgs):
     train_collector = SacCollector(
         policy,
         train_envs,
-        PrioritizedVectorReplayBuffer(
-            total_size=cfgs.per.buffer_size,
-            buffer_num=len(train_envs),
-            alpha=cfgs.per.alpha,
-            beta=cfgs.per.beta,
-            weight_norm=True,
-        ),
+        VectorReplayBuffer(cfgs.buffer_size, len(train_envs)),
         preprocess_fn=train_processor.preprocess_fn,
         exploration_noise=True
     )
@@ -143,10 +137,10 @@ def train(cfgs):
         warm_up = int(cfgs.per.buffer_size / 5)
         train_collector.collect(n_step=warm_up, random=True)
         tianchi_logger.info(f"------------Warmup Collect {warm_up} transitions------------")
-    else:
-        tianchi_logger.info(f"------------Buffer has {len(train_collector.buffer)} transitions------------")
         buffer_path = os.path.join(log_path, "train_buffer.pkl")
         pickle.dump(train_collector.buffer, open(buffer_path, "wb"))
+    else:
+        tianchi_logger.info(f"------------Buffer has {len(train_collector.buffer)} transitions------------")
 
     # trainer
     result = sac_policy_trainer(
