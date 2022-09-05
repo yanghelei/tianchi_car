@@ -18,3 +18,9 @@ def get_clones(module, N):
 def check(input):
     output = torch.from_numpy(input) if type(input) == np.ndarray else input
     return output
+
+
+def orthogonal_init_(m, gain=np.sqrt(2)):
+    return init(m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0), gain=gain)
+
+

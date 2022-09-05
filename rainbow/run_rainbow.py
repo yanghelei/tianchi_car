@@ -1,5 +1,6 @@
 import os
 import sys
+
 sys.path.append(os.path.split(os.path.dirname(os.path.abspath(__file__)))[0] + '/')
 import gym
 import torch
@@ -9,7 +10,7 @@ from geek.env.matrix_env import Scenarios
 from torch.utils.tensorboard import SummaryWriter
 
 from ts_inherit.logger import MyLogger
-from ts_inherit.networks import MyActor
+from ts_inherit.rainbow_actor import MyActor
 from ts_inherit.rainbow import MyRainbow
 from ts_inherit.collector import MyCollector
 from ts_inherit.trainer import my_policy_trainer
@@ -19,13 +20,12 @@ from tianshou.utils.net.discrete import NoisyLinear
 from tianshou.data import PrioritizedVectorReplayBuffer, VectorReplayBuffer
 
 from utils.processors import set_seed, Processor
-# from utils.exploration import get_epsilon_greedy_fn
 
 
 def make_train_env(cfgs, render_id=None):
     if render_id is not None:
-        # env = gym.make(cfgs.task, scenarios=Scenarios.TRAINING)
-        env = gym.make(cfgs.task, scenarios=Scenarios.TRAINING, render_id=str(render_id))
+        env = gym.make(cfgs.task, scenarios=Scenarios.TRAINING)
+        # env = gym.make(cfgs.task, scenarios=Scenarios.TRAINING, render_id=str(render_id))
     else:
         env = gym.make(cfgs.task, scenarios=Scenarios.TRAINING)
     if not hasattr(env, 'action_space'):
@@ -42,12 +42,6 @@ def make_test_env(cfgs):
 
 def train(cfgs):
     train_envs = SubprocVectorEnv([lambda i=_i: make_train_env(cfgs, i) for _i in range(cfgs.training_num)])
-
-    n_test_envs = 15-cfgs.training_num
-    if n_test_envs > 0:
-        test_envs = DummyVectorEnv([lambda i=_i: make_train_env(cfgs, 'test_'+str(i)) for _i in range(n_test_envs)])
-    else:
-        test_envs = None
 
     set_seed(seed=cfgs.seed)
 
@@ -89,38 +83,23 @@ def train(cfgs):
     writer = SummaryWriter(log_path)
     logger = MyLogger(writer, save_interval=cfgs.save_interval)
 
-    logger.logger.info('device: ' + str(cfgs.device))
+    tianchi_logger = logger.logger
+    tianchi_logger.info('device: ' + str(cfgs.device))
 
-    train_processor = Processor(cfgs, net, logger.logger, n_env=cfgs.training_num)
-
-    if test_envs is not None:
-        test_processor = Processor(cfgs, net, logger.logger, n_env=15-cfgs.training_num, update_norm=False)
-    else:
-        test_processor = None
+    train_processor = Processor(
+        cfgs,
+        tianchi_logger,
+        n_env=cfgs.training_num,
+        models=[net],
+        update_norm=True
+    )
 
     # collector
     train_collector = MyCollector(policy, train_envs, buf, preprocess_fn=train_processor.preprocess_fn, exploration_noise=True)
-    train_collector.set_logger(logger.logger, type='train')
-
-    if test_processor is not None:
-        test_collector = MyCollector(policy, test_envs, preprocess_fn=test_processor.preprocess_fn, exploration_noise=False)
-        test_collector.set_logger(logger.logger)
-    else:
-        test_collector = None
+    train_collector.set_logger(tianchi_logger, type='train')
 
     # policy logger
-    policy.set_logger(logger.logger)
-
-    # train_collector.collect(n_step=cfgs.training_num * 1000, random=False)
-
-    def save_best_fn(policy):
-        # 保存最优模型
-        torch.save(policy.state_dict(), os.path.join(log_path, "best_policy.pth"))
-        logger.logger.info('save best model into ' + str(os.path.join(log_path, "best_policy.pth")) + ' successfully!')
-
-    # def stop_fn(mean_rewards):
-    #     # 终止条件
-    #     return mean_rewards >= cfgs.reward_threshold
+    policy.set_logger(tianchi_logger)
 
     def train_fn(epoch, env_step):
         # 在每次训练前执行的操作
@@ -139,9 +118,6 @@ def train(cfgs):
                 beta = cfgs.beta_final
             buf.set_beta(beta)
 
-    def test_fn(epoch, env_step):
-        policy.set_eps(cfgs.eps_test)
-
     def save_checkpoint_fn(epoch, env_step, gradient_step):
         # see also: https://pytorch.org/tutorials/beginner/saving_loading_models.html
         ckpt_path = os.path.join(log_path, "checkpoint.pth")
@@ -155,12 +131,11 @@ def train(cfgs):
         logger.logger.info(f"Loading agent under {log_path}")
         ckpt_path = os.path.join(log_path, "checkpoint.pth")
         if os.path.exists(ckpt_path):
-            checkpoint = torch.load(ckpt_path, map_location=cfgs.device)
-            policy.load_state_dict(checkpoint['model'])
-            policy.optim.load_state_dict(checkpoint['optim'])
+            policy.load_state_dict(torch.load(ckpt_path, map_location=cfgs.device))
             logger.logger.info("Successfully restore policy and optim.")
         else:
             logger.logger.info("Fail to restore policy and optim.")
+
         buffer_path = os.path.join(log_path, "train_buffer.pkl")
         if os.path.exists(buffer_path):
             train_collector.buffer = pickle.load(open(buffer_path, "rb"))
@@ -168,32 +143,35 @@ def train(cfgs):
         else:
             logger.logger.info("Fail to restore buffer.")
 
+    if len(train_collector.buffer) == 0:
+        warm_up = int(cfgs.per.buffer_size / 5)
+        train_collector.collect(n_step=warm_up, random=True)
+        tianchi_logger.info(f"------------Warmup Collect {warm_up} transitions------------")
+        buffer_path = os.path.join(log_path, "train_buffer.pkl")
+        pickle.dump(train_collector.buffer, open(buffer_path, "wb"))
+    else:
+        tianchi_logger.info(f"------------Buffer has {len(train_collector.buffer)} transitions------------")
+
     # trainer
     result = my_policy_trainer(
         policy=policy,
         train_collector=train_collector,
-        test_collector=test_collector,  # 测试相关
+        test_collector=None,  # 测试相关
         max_epoch=cfgs.epoch,
         step_per_epoch=cfgs.step_per_epoch,
         step_per_collect=cfgs.step_per_collect,
-        episode_per_test=cfgs.test_num,  # 每次test多少个episode
+        episode_per_test=0,  # 每次test多少个episode
         batch_size=cfgs.batch_size,
         update_per_step=cfgs.update_per_step,
         train_fn=train_fn,
-        test_fn=test_fn,
+        test_fn=None,
         stop_fn=None,
-        save_best_fn=save_best_fn,
+        save_best_fn=None,
         logger=logger,
         show_progress=False,
         resume_from_log=cfgs.resume,
         save_checkpoint_fn=save_checkpoint_fn,
     )
-
-    # assert stop_fn(result["best_reward"])
-
-    pprint.pprint(result)
-
-    return policy
 
 
 def evaluate(cfgs, policy):
@@ -215,4 +193,4 @@ if __name__ == '__main__':
     cfg.action_space = gym.spaces.Discrete(cfg.action_per_dim[0] * cfg.action_per_dim[1])
     cfg.action_shape = cfg.action_space.n
 
-    policy = train(cfgs=cfg)
+    train(cfgs=cfg)

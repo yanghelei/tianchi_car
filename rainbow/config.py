@@ -7,13 +7,12 @@ config = dict(
     exp_name='rainbow',
 
     seed=1,
-    # task='CartPole-v1',
     task='MatrixEnv-v1',
     reward_threshold=None,
 
     exploration=dict(
         type='exp',
-        start=0.95,
+        start=0.10,
         end=0.05,
         decay=1e5
     ),
@@ -36,15 +35,15 @@ config = dict(
     epoch=1e7,
     step_per_epoch=7500,  # the number of transitions collected per epoch
     step_per_collect=750,  # trainer will collect "step_per_collect" transitions and do some policy network update repeatedly in each epoch.
-    update_per_step=0.2,
+    update_per_step=0.5,
 
     batch_size=256,  # the batch size of sample data, which is going to feed in the policy network
     # hidden_sizes=[128, 128],
 
     training_num=15,  # 用于训练的环境数目
-    test_num=20,  # the number of episodes for one policy evaluation
+    test_num=0,  # the number of episodes for one policy evaluation
 
-    logdir='/myspace/rainbow_v2.2.2',
+    logdir='/myspace/rainbow_v3.0.0',
     render=0.0,
 
     prioritized_replay=True,
@@ -57,25 +56,27 @@ config = dict(
 
     device='cuda' if torch.cuda.is_available() else 'cpu',
 
-    # action_low=np.array([-pi / 4.0, -0.88]),
-    # action_high=np.array([pi / 4.0, 0.88]),
-    action_mask=[],  # 速度 → 限制acc ; 车辆朝向限幅 → 限制 steer
     steer_prime_choices=np.array([-pi/18, 0, pi/18]),  # np.linspace(-pi/18, pi/18, 3)
     acc_prime_choice=np.array([-0.8, 0, 0.8]),
     action_per_dim=(3, 3),
 
     network=dict(
-        sur_dim=9,
-        sur_hidden=128,
-        ego_dim=11,
-        ego_hidden=64,
-        total_hidden=256,
-        action_hidden=(256, 128),
+        sur_in=9,
+        sur_hiddens=[64],
+        sur_out=128,
+
+        ego_in=11,
+        ego_hiddens=[64],
+        ego_out=64,
+
+        total_hiddens=[256],
+
+        action_hiddens=(256, 128),
     ),
 
     max_consider_nps=10,
-    dt=0.1
-    # history_length=5,
+    dt=0.1,
+    history_length=5,
 
 )
 

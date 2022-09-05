@@ -20,7 +20,7 @@ torch.set_num_threads(1)
 
 from utils.processors import get_observation_for_test
 from ts_inherit.utils import to_torch_as, to_numpy
-from ts_inherit.networks import MyActor
+from ts_inherit.rainbow_actor import MyActor
 from ts_inherit.rainbow import MyRainbow
 from tianshou.utils.net.discrete import NoisyLinear
 
