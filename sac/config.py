@@ -23,7 +23,7 @@ config = dict(
     auto_alpha=True,
 
     epoch=1e7,
-    step_per_epoch=7500 / 5,  # the number of transitions collected per epoch
+    step_per_epoch=7500,  # the number of transitions collected per epoch
     step_per_collect=750,  # trainer will collect "step_per_collect" transitions and do some policy network update repeatedly in each epoch.
     update_per_step=0.2,
 
@@ -31,7 +31,7 @@ config = dict(
 
     training_num=2,  # 用于训练的环境数目
 
-    logdir='/myspace/sac_v0.0.1',
+    logdir='/myspace/sac_v0.1.0',
     render=0.0,
 
     rew_norm=False,
