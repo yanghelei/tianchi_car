@@ -20,6 +20,7 @@ class PolicyParam():
     use_eval = False
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
     gaussian = True # 动作是否连续
+    action_repeat: int = 1 
 
     if debug:
         num_workers = 1

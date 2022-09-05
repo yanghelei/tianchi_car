@@ -74,6 +74,7 @@ class EnvWorker(mp.Process):
         self.env_post_processer = EnvPostProcsser()
         self.env_action_space = CommonConfig.env_action_space
         self.action_num =  CommonConfig.action_num
+        self.action_repeat = PolicyParam.action_repeat
         if not self.gaussian:
             self.actions_map = self._set_actions_map(121)
         torch.manual_seed(seed)
@@ -124,7 +125,10 @@ class EnvWorker(mp.Process):
                                 env_action = self.action_transform(gaussian_action)
                             else:
                                 env_action = self.action_transform(action, False)
-                            obs, reward, done, info = self.env.step(env_action)
+                            for _ in range(self.action_repeat):
+                                obs, reward, done, info = self.env.step(env_action)
+                                if done:
+                                    break
                             is_runtime_error = info.get(DoneReason.Runtime_ERROR, False)
                             is_infer_error = info.get(DoneReason.INFERENCE_DONE, False)
                             # 出现error则放弃本帧数据
@@ -166,7 +170,10 @@ class EnvWorker(mp.Process):
                                 env_action = self.action_transform(gaussian_action)
                             else:
                                 env_action = self.action_transform(action, False)
-                            obs, reward, done, info = self.env.step(env_action)
+                            for _ in range(self.action_repeat):
+                                obs, reward, done, info = self.env.step(env_action)
+                                if done:
+                                    break
                             # 出现error则则放弃本回合的数据
                             is_runtime_error = info.get(DoneReason.Runtime_ERROR, False)
                             is_infer_error = info.get(DoneReason.INFERENCE_DONE, False)

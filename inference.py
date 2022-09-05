@@ -25,6 +25,7 @@ args = parser.parse_args()
 high_action = CommonConfig.env_action_space.high
 low_action = CommonConfig.env_action_space.low
 action_num = CommonConfig.action_num
+action_repeat = PolicyParam.action_repeat
 
 
 def set_actions_map(action_num):
@@ -65,7 +66,10 @@ def run(worker_index):
         while True:
             action, _, _, _ = model.select_action(env_state, vec_state, True)
             env_action = action_transform(action, PolicyParam.gaussian)
-            obs, _, done, info = env.step(env_action)
+            for _ in range(action_repeat):
+                obs, _, done, info = env.step(env_action)
+                if done:
+                    break
             is_runtime_error = info.get(DoneReason.Runtime_ERROR, False)
             is_infer_error = info.get(DoneReason.INFERENCE_DONE, False)
             # 出现error则放弃本帧数据
