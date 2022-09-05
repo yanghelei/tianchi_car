@@ -8,7 +8,7 @@ from copy import deepcopy
 import math
 import os
 from typing import Dict
-
+import traceback
 import numpy
 import torch
 import torch as ch
@@ -16,7 +16,9 @@ import torch.nn as nn
 from train.config import PolicyParam
 from train.np_image import NPImage
 import numpy as np 
+from geek.env.logger import Logger
 
+logger = Logger.get_logger(__name__)
 STD = 2 ** 0.5
 
 
@@ -27,110 +29,6 @@ def file_name(file_dir, file_type):
             if os.path.splitext(file)[1] == file_type:
                 L.append(os.path.join(dirpath, file))
     return L
-
-def initialize_weights(mod, initialization_type, scale=STD):
-    """
-    Weight initializer for the models.
-    Inputs: A model, Returns: none, initializes the parameters
-    """
-    for p in mod.parameters():
-        if initialization_type == "normal":
-            p.data.normal_(0.01)
-        elif initialization_type == "xavier":
-            if len(p.data.shape) >= 2:
-                nn.init.xavier_uniform_(p.data)
-            else:
-                p.data.zero_()
-        elif initialization_type == "orthogonal":
-            if len(p.data.shape) >= 2:
-                orthogonal_init(p.data, gain=scale)
-            else:
-                p.data.zero_()
-        else:
-            raise ValueError("Need a valid initialization key")
-
-
-def orthogonal_init(tensor, gain=1):
-    if tensor.ndimension() < 2:
-        raise ValueError("Only tensors with 2 or more dimensions are supported")
-
-    rows = tensor.size(0)
-    cols = tensor[0].numel()
-    flattened = tensor.new(rows, cols).normal_(0, 1)
-
-    if rows < cols:
-        flattened.t_()
-
-    u, s, v = ch.svd(flattened, some=True)
-    if rows < cols:
-        u.t_()
-    q = u if tuple(u.shape) == (rows, cols) else v
-    with ch.no_grad():
-        tensor.view_as(q).copy_(q)
-        tensor.mul_(gain)
-    return tensor
-
-
-class TianchiCNN(object):
-    def __init__(
-        self,
-    ):
-        self.base_image_size = 500
-        self.crop_size = 224
-        self.resize_size = 224
-        self.base_image_reso = 1.0
-        self.draw_count = 0
-
-    def draw_from_obs(self, obs, center_dict=None):
-
-        undrivable_img = NPImage(
-            meter_per_pixel=self.base_image_reso,
-            width=self.base_image_size,
-            height=self.base_image_size,
-        )
-
-        drivable_img = NPImage(
-            meter_per_pixel=self.base_image_reso,
-            width=self.base_image_size,
-            height=self.base_image_size,
-        )
-
-        obs_img = NPImage(
-            meter_per_pixel=self.base_image_reso,
-            width=self.base_image_size,
-            height=self.base_image_size,
-        )
-
-        center_pose_x = obs["player"]["status"][0]
-        center_pose_y = obs["player"]["status"][1]
-        center_pose_h = obs["player"]["status"][2]
-
-        ego_width = obs["player"]["property"][0]
-        ego_length = obs["player"]["property"][1]
-
-        undrivable_img.set_center_pose((center_pose_x, center_pose_y))
-        drivable_img.set_center_pose((center_pose_x, center_pose_y))
-        obs_img.set_center_pose((center_pose_x, center_pose_y))
-
-        obs_img.draw_rect((center_pose_x, center_pose_y, center_pose_h), ego_length, ego_width, 255)
-
-        for npc in obs["npcs"]:
-            obs_img.draw_rect((npc[2], npc[3], npc[4]), npc[10], npc[9], 128)
-
-        if center_dict:
-            for centers in center_dict.values():
-                drivable_img.draw_polyline(centers, 128)
-
-        merge_img = undrivable_img.merge([drivable_img, obs_img])
-
-        heading_angle = 90 - center_pose_h * 180.0 / math.pi
-
-        merge_img.resize(self.resize_size).rotate(
-            (self.resize_size / 2, self.resize_size / 2), heading_angle, self.resize_size
-        ).flip()
-
-        return merge_img.img_data
-
 
 class EnvPostProcsser:
     def __init__(self) -> None:
@@ -213,15 +111,19 @@ class EnvPostProcsser:
         prev_steer = observation["player"]["status"][7] # 上一个前轮转角命令
         prev_acc = observation["player"]["status"][8] # 上一个加速度命令
         lane_list = []
-        
+                    
         if observation['map'] is not None:
             for lane_info in observation["map"].lanes:
                 lane_list.append(lane_info.lane_id)
             current_lane_index = lane_list.index(observation["map"].lane_id)
             current_offset = observation["map"].lane_offset
+            self.pre_lane_index = current_lane_index
+            self.pre_offset = current_offset
         else:
-            current_lane_index = -1
-            current_offset = 0
+            logger.info('map in obs is None!')
+            current_lane_index = self.pre_lane_index
+            current_offset = self.pre_offset
+
         vec_obs = numpy.array(
             [
                 delta_xy[0],  # 目标区域与当前位置的偏差x
@@ -259,9 +161,10 @@ class EnvPostProcsser:
                 (target_xy[0] - curr_xy[0]) ** 2 + (target_xy[1] - curr_xy[1]) ** 2
             )
         except KeyError:
-            distance_with_target = self.prev_distance
             print(info)
-            print(observation)
+            logger.error(f"exception: {traceback.print_exc()}")
+            distance_with_target = self.prev_distance
+
         if self.prev_distance is None:
             self.prev_distance = distance_with_target
         
@@ -278,38 +181,43 @@ class EnvPostProcsser:
         else:
             end_reward = 0.0
         
-        # add penalty when reaching close to other cars (same lane)
         if observation['map'] is not None:
             current_lane_index = observation["map"].lane_id
+            current_offset = observation["map"].lane_offset
         else:
+            logger.info('map in obs is None!')
             current_lane_index = -1
+            current_offset = 0
+
+        # add penalty when reaching close to other cars (same lane)
         length = observation["player"]['property'][1] # 车辆长度
         npc_info = observation['npcs'] 
         same_lane_npcs = [] # 同车道 npc
         for npc in npc_info:
             if npc[0] == 0:
                 break
-            try: 
-                lane_id = info['agent_infos'][npc[0]]['lane_id']
-            except KeyError:
-                continue
-            if lane_id == current_lane_index:
+            dy = npc[3] - observation["player"]['status'][1]
+            if dy < length:
                 same_lane_npcs.append(npc)
         collide_reward = 0
         for npc in same_lane_npcs:
-            safe_distance = (npc[-1] + length)/2
+            safe_distance = (npc[-1] + length)/2 + length
             dx = npc[2] - observation["player"]['status'][0]
-            dy = npc[3] - observation["player"]['status'][1]
-            distance = np.sqrt(dx**2+dy**2)
-            if distance < safe_distance:
-                penalty = -0.1-(safe_distance-distance)*0.1
-                collide_reward = min(collide_reward, penalty)
+            if dx < 0:
+                if np.abs(dx) < safe_distance:
+                    penalty = -0.1-(safe_distance - np.abs(dx))*0.1
+                    collide_reward = min(collide_reward, penalty)
+        
+        if info['collided']:
+            collide_reward -= 10 
 
         return distance_reward + end_reward + step_reward + collide_reward
 
     def reset(self, initial_obs):
         self.prev_distance = None
         self.pre_vec_obs = None
+        self.pre_lane_index = 1
+        self.pre_offset = 0
         # self.reward_scale.reset()
         # self.img_deque = collections.deque(maxlen=5)
         # 填充初始帧

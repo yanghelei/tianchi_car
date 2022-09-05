@@ -4,32 +4,48 @@
 # *****************************************************************************
 
 from multiprocessing import Pool
-
 import gym
-import numpy
-import os 
-import sys 
 from geek.env.logger import Logger
 from geek.env.matrix_env import DoneReason, Scenarios
-
-logger = Logger.get_logger(__name__)
-from train.policy import PPOPolicy
+from train.policy import PPOPolicy, CategoricalPPOPolicy
 from train.tools import EnvPostProcsser
 from train.workers import EnvWorker
-from pathlib import Path
+import numpy as np 
 import argparse 
 import torch
-from train.config import CommonConfig
-# os.environ["OMP_NUM_THREADS"] = "1"  # Necessary for multithreading.
+from train.config import CommonConfig, PolicyParam
+
+logger = Logger.get_logger(__name__)
 torch.set_num_threads(1)
 model_dir = CommonConfig.remote_path
-
 parser = argparse.ArgumentParser()
 parser.add_argument('--load_model', action="store_true", default=False)
 parser.add_argument('--num_workers', type=int, default=1)
 args = parser.parse_args()
 high_action = CommonConfig.env_action_space.high
 low_action = CommonConfig.env_action_space.low
+action_num = CommonConfig.action_num
+
+
+def set_actions_map(action_num):
+    #dicretise action space
+    forces = np.linspace(-2, 2, num=int(np.sqrt(action_num)), endpoint=True)
+    thetas = np.linspace(-0.3925, 0.3925, num=int(np.sqrt(action_num)), endpoint=True)
+    actions = [[force, theta] for force in forces for theta in thetas]
+    actions_map = {i:actions[i] for i in range(action_num)}
+    return actions_map 
+actions_map = set_actions_map(action_num)
+def action_transform(action, gaussian) -> np.array :
+    if gaussian:
+        high_action = CommonConfig.env_action_space.high
+        low_action = CommonConfig.env_action_space.low
+        steer = EnvWorker.lmap(action[0],[-1.0, 1.0],[low_action[0], high_action[0]],)
+        acc = EnvWorker.lmap(action[1], [-1.0, 1.0], [low_action[1], high_action[1]])
+        env_action = np.array([steer, acc])
+    else:
+        env_action = np.array(actions_map[action.item()])
+    return env_action
+
 def run(worker_index):
     try:
         reach_goal = 0
@@ -37,7 +53,10 @@ def run(worker_index):
         logger.info(f'worker {worker_index} starting')
         env = gym.make("MatrixEnv-v1", scenarios=Scenarios.INFERENCE, render_id=worker_index)
         obs = env.reset()
-        model = PPOPolicy(2)
+        if PolicyParam.gaussian:
+            model = PPOPolicy(2)
+        else:
+            model = CategoricalPPOPolicy(action_num)
         env_post_processer = EnvPostProcsser()
         if args.load_model:
             model.load_model(model_dir+'/network.pth', 'cpu')
@@ -45,10 +64,8 @@ def run(worker_index):
         vec_state, env_state = env_post_processer.reset(obs)
         while True:
             action, _, _, _ = model.select_action(env_state, vec_state, True)
-            action = action.data.cpu().numpy()[0]
-            steer = EnvWorker.lmap(action[0],[-1.0, 1.0],[low_action[0], high_action[0]],)
-            acc = EnvWorker.lmap(action[1], [-1.0, 1.0], [low_action[1], high_action[1]])
-            obs, _, done, info = env.step(numpy.array([steer, acc]))
+            env_action = action_transform(action, PolicyParam.gaussian)
+            obs, _, done, info = env.step(env_action)
             is_runtime_error = info.get(DoneReason.Runtime_ERROR, False)
             is_infer_error = info.get(DoneReason.INFERENCE_DONE, False)
             # 出现error则放弃本帧数据

@@ -17,9 +17,9 @@ class PolicyParam():
     seed: int = 1234
 
     debug = False
-    use_eval = True
+    use_eval = False
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
-    gaussian = False # 动作是否连续
+    gaussian = True # 动作是否连续
 
     if debug:
         num_workers = 1
@@ -29,10 +29,10 @@ class PolicyParam():
         minibatch_size = 600
         num_epoch = 3
     else:
-        num_workers: int = 12
-        random_episode: int = 20
+        num_workers: int = 15
+        random_episode: int = 0
         num_episode: int = 1000
-        batch_size: int =  4196
+        batch_size: int =  6144
         minibatch_size: int = 256
         num_epoch: int = 3
 
@@ -49,7 +49,7 @@ class PolicyParam():
     schedule_adam: str = "fix"
     schedule_clip: str = "fix"
 
-    save_num_episode: int = 10
+    save_num_episode: int = 100
     log_num_episode: int = 10
     eval_interval: int = 100
     eval_episode: int = 100 
@@ -70,7 +70,7 @@ class PolicyParam():
 
     reload = False
 
-    model_path: str = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'gaussian_ppo_v2' / 'network.pth')
+    model_path: str = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'gaussian_ppo_v3' / 'network.pth')
     obs_type: str = "vec"
     img_width: int = 224
     img_length: int = 224
@@ -85,6 +85,6 @@ class PolicyParam():
 
 class CommonConfig:
 
-    remote_path = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'gaussian_ppo_v2')
+    remote_path = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'categorical_ppo_v1')
     env_action_space = Box(low=np.array([-0.3925, -2.0]), high=np.array([0.3925, 2.0]), dtype=np.float32)
     action_num = 121

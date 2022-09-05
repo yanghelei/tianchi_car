@@ -24,13 +24,13 @@ from ai_hub import Logger as Writer
 logger = Logger.get_logger(__name__)
 
 class MulProPPO:
-    def __init__(self, logger, task_name, load):
+    def __init__(self, logger, task_name, load, start_episode):
         self.args = PolicyParam
         self.logger = logger
         self.global_sample_size = 0
         self.task_name = task_name
         self.load = load
-
+        self.start_episode = start_episode
         self._make_dir()
 
         torch.manual_seed(self.args.seed)
@@ -51,7 +51,6 @@ class MulProPPO:
             self.value_norm = Normalization(1, device = self.args.device)
 
         self.clip_now = self.args.clip
-        self.start_episode = 0
         self.start_time = time.time()
 
     def _load_model(self, model_path: str = None):
@@ -327,7 +326,7 @@ class MulProPPO:
         nc.task_complete_notice(task_name="Training", task_progree=f"training Started {self.task_name}.")
         best_reward = -np.inf
 
-        for i_episode in range(self.args.num_episode):
+        for i_episode in range(self.start_episode, self.start_episode+self.args.num_episode):
 
             memory = self.sampler.sample(self.model)
             batch = memory.sample()
@@ -386,21 +385,14 @@ class MulProPPO:
                 and i_episode > self.args.random_episode \
                 or i_episode == (self.args.num_episode-1):
                 torch.save(
-                    self.model.state_dict(), self.model_dir + "network.pth"
+                    self.model.state_dict(), self.model_dir + f"network_{i_episode}.pth"
                 )
                 # 存储到云端
                 torch.save(
-                    self.model.state_dict(), remote_path + "/network.pth"
+                    self.model.state_dict(), remote_path + f"/network_{i_episode}.pth"
                 )
                 self.logger.info(f'model has been successfully saved : {remote_path}')
 
-        torch.save(
-            self.model.state_dict(), self.model_dir + "network.pth"
-        )
-        # 存储到云端
-        torch.save(
-                    self.model.state_dict(), remote_path + "/network.pth"
-                )
         self.sampler.close()
 
 if __name__ == "__main__":
@@ -408,10 +400,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--task_name', type=str, default='Base_PPO')
     parser.add_argument('--load', action='store_true', default=False)
+    parser.add_argument('--start_episode', type=int, default=0)
     args = parser.parse_args()
     remote_path = CommonConfig.remote_path
     os.makedirs(remote_path, exist_ok=True)
-    # os.environ["OMP_NUM_THREADS"] = "1"  # Necessary for multithreading.
     torch.set_num_threads(1)
-    mpp = MulProPPO(logger, args.task_name, args.load)
+    mpp = MulProPPO(logger, args.task_name, args.load, args.start_episode)
     mpp.train()

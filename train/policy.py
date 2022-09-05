@@ -160,7 +160,8 @@ class PPOPolicy(nn.Module):
         
         self.sur_obs_norm.update(sur_obs)
         self.ego_obs_norm.update(ego_obs)
-    
+        
+    @torch.no_grad()
     def select_action(self, sur_obs, ego_obs, deterministic=False):
         
         env_feature = self.get_env_feature(sur_obs, ego_obs)
@@ -291,6 +292,7 @@ class CategoricalPPOPolicy(nn.Module):
         self.sur_obs_norm.update(sur_obs)
         self.ego_obs_norm.update(ego_obs)
     
+    @torch.no_grad()
     def select_action(self, sur_obs, ego_obs, deterministic=False):
 
         # 归一化
