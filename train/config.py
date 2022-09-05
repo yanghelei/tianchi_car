@@ -71,7 +71,7 @@ class PolicyParam():
 
     reload = False
 
-    model_path: str = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'gaussian_ppo_v3' / 'network.pth')
+    model_path: str = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'categorical_ppo_v1' / 'network.pth')
     obs_type: str = "vec"
     img_width: int = 224
     img_length: int = 224

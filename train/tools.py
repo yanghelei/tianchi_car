@@ -197,7 +197,7 @@ class EnvPostProcsser:
             if npc[0] == 0:
                 break
             dy = npc[3] - observation["player"]['status'][1]
-            if dy < length:
+            if np.abs(dy) < length:
                 same_lane_npcs.append(npc)
         collide_reward = 0
         for npc in same_lane_npcs:
