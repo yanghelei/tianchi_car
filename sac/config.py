@@ -29,7 +29,7 @@ config = dict(
 
     batch_size=256,
 
-    training_num=2,  # 用于训练的环境数目
+    training_num=15,  # 用于训练的环境数目
 
     logdir='/myspace/sac_v0.1.0',
     render=0.0,

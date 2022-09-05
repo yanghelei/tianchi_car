@@ -145,6 +145,8 @@ def train(cfgs):
         tianchi_logger.info(f"------------Warmup Collect {warm_up} transitions------------")
     else:
         tianchi_logger.info(f"------------Buffer has {len(train_collector.buffer)} transitions------------")
+        buffer_path = os.path.join(log_path, "train_buffer.pkl")
+        pickle.dump(train_collector.buffer, open(buffer_path, "wb"))
 
     # trainer
     result = sac_policy_trainer(
