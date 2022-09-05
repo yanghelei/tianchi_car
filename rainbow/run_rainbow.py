@@ -144,7 +144,7 @@ def train(cfgs):
             logger.logger.info("Fail to restore buffer.")
 
     if len(train_collector.buffer) == 0:
-        warm_up = int(cfgs.per.buffer_size / 5)
+        warm_up = int(cfgs.buffer_size / 5)
         train_collector.collect(n_step=warm_up, random=True)
         tianchi_logger.info(f"------------Warmup Collect {warm_up} transitions------------")
         buffer_path = os.path.join(log_path, "train_buffer.pkl")
