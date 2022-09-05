@@ -25,7 +25,7 @@ config = dict(
     epoch=1e7,
     step_per_epoch=7500,  # the number of transitions collected per epoch
     step_per_collect=750,  # trainer will collect "step_per_collect" transitions and do some policy network update repeatedly in each epoch.
-    update_per_step=0.2,
+    update_per_step=1,  # default: 0.2
 
     batch_size=256,
 

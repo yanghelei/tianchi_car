@@ -30,9 +30,9 @@ class SacTrainer(OffpolicyTrainer):
             loss['critic2'] += losses["loss/critic2"]
             self.log_update_data(data, losses)
 
-        a_loss = round(loss['actor'], 2)
-        c1_loss = round(loss['critic1'], 2)
-        c2_loss = round(loss['critic2'], 2)
+        a_loss = round(loss['actor']/update_num, 2)
+        c1_loss = round(loss['critic1']/update_num, 2)
+        c2_loss = round(loss['critic2']/update_num, 2)
 
         cost_time = round(time.time() - start_time, 2)
 
