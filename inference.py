@@ -45,7 +45,7 @@ def action_transform(action, gaussian) -> np.array :
         acc = EnvWorker.lmap(action[1], [-1.0, 1.0], [low_action[1], high_action[1]])
         env_action = np.array([steer, acc])
     else:
-        env_action = np.array(actions_map[action.item()])
+        env_action = np.array(actions_map[action])
     return env_action
 
 def run(worker_index):

@@ -315,11 +315,11 @@ class CategoricalPPOPolicy(nn.Module):
         if not deterministic:
             action = action_distribution.sample()
         else:
-            action = torch.argmax(action_out)
+            action = torch.argmax(action_out, dim=1)
             
         logproba = action_distribution.log_prob(action)
 
-        return action.cpu().numpy(), np.zeros(1), logproba.cpu().numpy()[0], value.cpu().numpy()[0]
+        return action.cpu().numpy()[0], np.zeros(1), logproba.cpu().numpy()[0], value.cpu().numpy()[0]
 
     def eval(self, env_feature, actions):
 

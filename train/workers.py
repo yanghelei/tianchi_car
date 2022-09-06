@@ -100,7 +100,7 @@ class EnvWorker(mp.Process):
             acc = self.lmap(action[1], [-1.0, 1.0], [low_action[1], high_action[1]])
             env_action = np.array([steer, acc])
         else:
-            env_action = np.array(self.actions_map[action.item()])
+            env_action = np.array(self.actions_map[action])
 
         return env_action
 
