@@ -132,7 +132,7 @@ class MulProPPO:
         rewards = torch.from_numpy(np.array(batch.reward))
         values = torch.from_numpy(np.array(batch.value))
         masks = torch.from_numpy(np.array(batch.mask))
-        actions = torch.from_numpy(np.array(batch.action))
+        actions = torch.from_numpy(np.array(batch.action)) # 这一句可能会报错 
         gaussian_actions = torch.from_numpy(np.array(batch.gaussian_action))
         sur_obs = torch.from_numpy(np.array(batch.sur_obs))
         vec_obs = torch.from_numpy(np.array(batch.vec_obs))
@@ -391,7 +391,7 @@ class MulProPPO:
                 torch.save(
                     self.model.state_dict(), remote_path + f"/network_{i_episode}.pth"
                 )
-                self.logger.info(f'model has been successfully saved : {remote_path}')
+                self.logger.info(f'model has been successfully saved : {remote_path} + "/network_{i_episode}')
 
         self.sampler.close()
 

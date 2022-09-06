@@ -20,6 +20,7 @@ torch.set_num_threads(1)
 model_dir = CommonConfig.remote_path
 parser = argparse.ArgumentParser()
 parser.add_argument('--load_model', action="store_true", default=False)
+parser.add_argument('--episode', type=int, default=0)
 parser.add_argument('--num_workers', type=int, default=1)
 args = parser.parse_args()
 high_action = CommonConfig.env_action_space.high
@@ -60,7 +61,7 @@ def run(worker_index):
             model = CategoricalPPOPolicy(action_num)
         env_post_processer = EnvPostProcsser()
         if args.load_model:
-            model.load_model(model_dir+'/network.pth', 'cpu')
+            model.load_model(model_dir+f'/network_{args.episode}.pth', 'cpu')
             logger.info('model has been successfully loaded')
         vec_state, env_state = env_post_processer.reset(obs)
         while True:
