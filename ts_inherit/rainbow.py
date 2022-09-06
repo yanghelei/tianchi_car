@@ -8,6 +8,9 @@ from rainbow.config import cfg
 
 class MyRainbow(RainbowPolicy):
 
+    def add_iter(self):
+        self._iter += 1
+
     def make_action_library(self, cfgs):
         steer_prime_choices = cfgs.steer_prime_choices
         acc_prime_choice = cfgs.acc_prime_choice
