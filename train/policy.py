@@ -70,16 +70,16 @@ class Feature_Net(nn.Module):
         super().__init__()
         self.sur_feature_net = TimeVecFeatureNet(70, 5, 128)
         self.ego_feature_net = TimeVecFeatureNet(8, 5, 128)
-        self.feature_net = nn.Sequential(
-                           orthogonal_init_(nn.Linear(256, 256)), 
-                           nn.ReLU())
+        # self.feature_net = nn.Sequential(
+        #                    orthogonal_init_(nn.Linear(256, 256)), 
+        #                    nn.ReLU())
     
     def forward(self, sur_obs, ego_obs):
 
         ego_feature = self.ego_feature_net(ego_obs)
         sur_feature = self.sur_feature_net(sur_obs)
         env_feature = torch.concat([ego_feature, sur_feature], dim=1)
-        env_feature = self.feature_net(env_feature)
+        # env_feature = self.feature_net(env_feature)
 
         return env_feature
 
@@ -104,6 +104,8 @@ class PPOPolicy(nn.Module):
                     [
                         ("actor_1", orthogonal_init_(nn.Linear(256, 256))),
                         ("actor_relu_1", nn.ReLU()),
+                        ("actor_2", orthogonal_init_(nn.Linear(256, 256))),
+                        ("actor_relu_2", nn.ReLU()),
                         ("actor_mu", orthogonal_init_(nn.Linear(256, num_outputs), gain=0.01)),
                     ]
                 )
@@ -116,6 +118,8 @@ class PPOPolicy(nn.Module):
                     [
                         ("actor_1", orthogonal_init_(nn.Linear(256, 256))),
                         ("actor_relu_1", nn.ReLU()),
+                        ("actor_2", orthogonal_init_(nn.Linear(256, 256))),
+                        ("actor_relu_2", nn.ReLU()),
                         ("actor_mu", orthogonal_init_(nn.Linear(256, num_outputs*2), gain=0.01)),
                     ]
                 )
@@ -126,6 +130,8 @@ class PPOPolicy(nn.Module):
                 [
                     ("critic_1", orthogonal_init_(nn.Linear(256, 256))),
                     ("critic_relu_1", nn.ReLU()),
+                    ("critic_2", orthogonal_init_(nn.Linear(256, 256))),
+                    ("critic_relu_2", nn.ReLU()),
                     ("critic_output", orthogonal_init_(nn.Linear(256, 1))),
                 ]
             )
