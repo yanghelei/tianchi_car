@@ -333,7 +333,7 @@ class Processor:
             for _idx, _id in enumerate(kwargs['env_id']):
                 obs[_idx] = self.get_observation(kwargs['obs'][_idx], env_id=_id)
                 self.env_last_obs[_id] = kwargs['obs'][_idx]
-                self.update_distance_to_target(_id)
+            self.update_distance_to_target(kwargs['env_id'])
             obs = np.array(obs)
             return Batch(obs=obs)
 
