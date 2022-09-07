@@ -33,9 +33,9 @@ config = dict(
     target_update_freq=3e4,  # v1.2: 2e4  v1.3: 2.8e3     v1.4: 1.4e3
 
     epoch=1e7,
-    step_per_epoch=1e4,  # the number of transitions collected per epoch
-    step_per_collect=1e3,  # trainer will collect "step_per_collect" transitions and do some policy network update repeatedly in each epoch.
-    update_per_step=5,
+    step_per_epoch=1.5e4,  # the number of transitions collected per epoch
+    step_per_collect=1.5e3,  # trainer will collect "step_per_collect" transitions and do some policy network update repeatedly in each epoch.
+    update_per_step=2,
 
     batch_size=256,  # the batch size of sample data, which is going to feed in the policy network
     # hidden_sizes=[128, 128],
