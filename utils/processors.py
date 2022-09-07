@@ -20,7 +20,9 @@ class Processor:
 
         self.envs_id = [i for i in range(self.n_env)]
         self.env_last_obs = [None] * self.n_env
-        self.env_last_distance = [None] * self.n_env
+        self.env_last_distance = [0] * self.n_env
+
+        self.phases_distances = [[]] * self.n_env
 
         self.models = models
 
@@ -192,6 +194,12 @@ class Processor:
 
         self.env_last_distance[env_id] = distance_with_target
 
+        if distance_with_target < self.phases_distances[env_id][-1]:
+            phase_reward = 50
+            self.phases_distances[env_id].pop()
+        else:
+            phase_reward = 0
+
         step_reward = -1
 
         car_status = next_obs['player']['status']
@@ -274,7 +282,7 @@ class Processor:
         if fastly_brake or big_turn or over_speed:
             rule_reward = brake_reward + turn_reward + high_speed_reward
         else:
-            rule_reward = distance_close * 0.5 + offset_reward
+            rule_reward = distance_close + offset_reward
 
         if info["collided"]:  # 碰撞
             end_reward = -1000
@@ -285,7 +293,7 @@ class Processor:
         else:
             end_reward = 0.0  # 尚未 terminate
 
-        return end_reward + step_reward + rule_reward
+        return end_reward + step_reward + rule_reward + phase_reward
 
     def update_distance_to_target(self, env_id):
         obs = self.env_last_obs[env_id]
@@ -296,6 +304,16 @@ class Processor:
         )
         curr_xy = (obs["player"]["status"][0], obs["player"]["status"][1])
         self.env_last_distance[env_id] = compute_distance(target_xy, curr_xy)
+        self.get_phases(env_id)
+
+    def get_phases(self, env_ids):
+        for env_id in env_ids:
+            phases = list()
+            distance = 0
+            while distance < self.env_last_distance[env_id]:
+                phases.append(distance)
+                distance += 100
+            self.phases_distances[env_id] = phases
 
     def preprocess_fn(self, **kwargs):
         # assert len(kwargs['env_id']) == len(self.envs_id)
