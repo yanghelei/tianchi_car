@@ -306,14 +306,13 @@ class Processor:
         self.env_last_distance[env_id] = compute_distance(target_xy, curr_xy)
         self.get_phases(env_id)
 
-    def get_phases(self, env_ids):
-        for env_id in env_ids:
-            phases = list()
-            distance = 0
-            while distance < self.env_last_distance[env_id]:
-                phases.append(distance)
-                distance += 100
-            self.phases_distances[env_id] = phases
+    def get_phases(self, env_id):
+        phases = list()
+        distance = 0
+        while distance < self.env_last_distance[env_id]:
+            phases.append(distance)
+            distance += 100
+        self.phases_distances[env_id] = phases
 
     def preprocess_fn(self, **kwargs):
         # assert len(kwargs['env_id']) == len(self.envs_id)
@@ -333,7 +332,7 @@ class Processor:
             for _idx, _id in enumerate(kwargs['env_id']):
                 obs[_idx] = self.get_observation(kwargs['obs'][_idx], env_id=_id)
                 self.env_last_obs[_id] = kwargs['obs'][_idx]
-            self.update_distance_to_target(kwargs['env_id'])
+                self.update_distance_to_target(_id)
             obs = np.array(obs)
             return Batch(obs=obs)
 
