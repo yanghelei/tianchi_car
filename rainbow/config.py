@@ -52,7 +52,7 @@ config = dict(
     beta_final=1.0,
 
     resume=True,
-    resume_buffer=True,
+    resume_buffer=False,
     save_interval=1,
 
     device='cuda' if torch.cuda.is_available() else 'cpu',
