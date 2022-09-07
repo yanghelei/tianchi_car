@@ -137,12 +137,13 @@ def train(cfgs):
         else:
             logger.logger.info("Fail to restore policy and optim.")
 
-        buffer_path = os.path.join(log_path, "train_buffer.pkl")
-        if os.path.exists(buffer_path):
-            train_collector.buffer = pickle.load(open(buffer_path, "rb"))
-            logger.logger.info("Successfully restore buffer.")
-        else:
-            logger.logger.info("Fail to restore buffer.")
+        if cfgs.resume_buffer:
+            buffer_path = os.path.join(log_path, "train_buffer.pkl")
+            if os.path.exists(buffer_path):
+                train_collector.buffer = pickle.load(open(buffer_path, "rb"))
+                logger.logger.info("Successfully restore buffer.")
+            else:
+                logger.logger.info("Fail to restore buffer.")
 
     if len(train_collector.buffer) == 0:
         warm_up = int(cfgs.buffer_size / 5)
