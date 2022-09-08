@@ -22,7 +22,8 @@ class TimeVecFeatureNet(nn.Module):
         input shape : [batch_size, vector_num, vector_length]
         """
         batch_size, _, _ = input.shape
-        layer_1_out = F.relu(self.layer_1(input)).permute(0, 2, 1).contiguous()
+        # layer_1_out = F.relu(self.layer_1(input)).permute(0, 2, 1).contiguous()
+        layer_1_out = input.permute(0, 2, 1).contiguous()
         layer_2_out = F.relu(self.layer_2(layer_1_out))
         layer_2_out = layer_2_out.view(batch_size, self.hidden_size)
         return layer_2_out
@@ -47,30 +48,30 @@ class MyActor(nn.Module):
         self.softmax = softmax
         self.num_atoms = num_atoms
 
-        self.sur_norm = Normalization(input_shape=cfgs.sur_in, device=self.device)
-        self.ego_norm = Normalization(input_shape=cfgs.ego_in, device=self.device)
+        self.sur_norm = Normalization(input_shape=cfgs.network.sur_in, device=self.device)
+        self.ego_norm = Normalization(input_shape=cfgs.network.ego_in, device=self.device)
 
-        self.sur_project = MLP(input_dim=cfgs.sur_in,
-                               output_dim=cfgs.sur_out,
-                               hidden_sizes=cfgs.sur_hiddens,
+        self.sur_project = MLP(input_dim=cfgs.network.sur_in,
+                               output_dim=cfgs.network.sur_out,
+                               hidden_sizes=cfgs.network.sur_hiddens,
                                device=self.device,
                                flatten_input=False)
-        self.ego_project = MLP(input_dim=cfgs.ego_in,
-                               output_dim=cfgs.ego_out,
-                               hidden_sizes=cfgs.ego_hiddens,
+        self.ego_project = MLP(input_dim=cfgs.network.ego_in,
+                               output_dim=cfgs.network.ego_out,
+                               hidden_sizes=cfgs.network.ego_hiddens,
                                device=self.device,
                                flatten_input=False)
-        self.project = MLP(input_dim=cfgs.sur_out + cfgs.ego_out,
-                           output_dim=cfgs.total_hiddens[-1],
-                           hidden_sizes=cfgs.total_hiddens,
+        self.project = MLP(input_dim=cfgs.network.sur_out + cfgs.network.ego_out,
+                           output_dim=cfgs.network.frame_out,
+                           hidden_sizes=cfgs.network.frame_hiddens,
                            device=self.device,
                            flatten_input=False)
 
-        self.output_dim = cfgs.total_hiddens[-1]
+        self.time_transform = TimeVecFeatureNet(input_shape=cfgs.network.frame_out,
+                                                num=cfgs.history_length,
+                                                hidden_size=cfgs.network.time_out)
 
-        self.time_transform = TimeVecFeatureNet(input_shape=self.output_dim,
-                                                num=5,
-                                                hidden_size=self.output_dim)
+        self.output_dim = cfgs.network.time_out
 
         self.tpdv = dict(dtype=torch.float32, device=device)
 
@@ -85,7 +86,7 @@ class MyActor(nn.Module):
 
         self.model = MLP(input_dim=input_dim,
                          output_dim=output_dim,
-                         hidden_sizes=cfgs.action_hiddens,
+                         hidden_sizes=cfgs.network.action_hiddens,
                          norm_layer=norm_layer,
                          activation=activation,
                          device=device,

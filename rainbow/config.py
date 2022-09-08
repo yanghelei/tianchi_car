@@ -12,9 +12,9 @@ config = dict(
 
     exploration=dict(
         type='exp',
-        start=0.10,
+        start=0.95,
         end=0.05,
-        decay=1e5
+        decay=5e5
     ),
     # eps_train=0.1,
     eps_test=0.01,
@@ -34,8 +34,8 @@ config = dict(
 
     epoch=1e7,
     step_per_epoch=1.5e4,  # the number of transitions collected per epoch
-    step_per_collect=1.5e3,  # trainer will collect "step_per_collect" transitions and do some policy network update repeatedly in each epoch.
-    update_per_step=2,
+    step_per_collect=3e3,  # trainer will collect "step_per_collect" transitions and do some policy network update repeatedly in each epoch.
+    update_per_step=1,
 
     batch_size=256,  # the batch size of sample data, which is going to feed in the policy network
     # hidden_sizes=[128, 128],
@@ -63,21 +63,25 @@ config = dict(
 
     network=dict(
         sur_in=9,
-        sur_hiddens=[64],
-        sur_out=128,
+        sur_hiddens=[],
+        sur_out=64,
 
         ego_in=11,
-        ego_hiddens=[64],
-        ego_out=64,
+        ego_hiddens=[],
+        ego_out=32,
 
-        total_hiddens=[256],
+        frame_out=128,
+        frame_hiddens=[],
 
-        action_hiddens=(256, 128),
+        time_out=128,
+        time_hiddens=[],
+
+        action_hiddens=[],
     ),
 
-    max_consider_nps=10,
+    max_consider_nps=7,
     dt=0.1,
-    history_length=5,
+    history_length=10,
 
 )
 

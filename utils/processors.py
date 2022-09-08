@@ -280,7 +280,8 @@ class Processor:
             offset_reward = 0
 
         if fastly_brake or big_turn or over_speed:
-            rule_reward = brake_reward + turn_reward + high_speed_reward
+            # TODO: 这里设置成了如果动作发犯规，则没有正奖励，避免一头撞死
+            rule_reward = 0  # brake_reward + turn_reward + high_speed_reward
         else:
             rule_reward = distance_close + offset_reward
 

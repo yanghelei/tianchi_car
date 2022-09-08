@@ -49,7 +49,7 @@ def train(cfgs):
         return NoisyLinear(x, y, cfgs.noisy_std)
 
     net = MyActor(
-        cfgs.network,
+        cfgs,
         cfgs.action_shape,
         device=cfgs.device,
         softmax=True,
