@@ -156,6 +156,8 @@ class Processor:
         if curr_velocity > speed_limit and prev_acc > 0:
             # 如果【当前速度大于该条车道的限速】，并且【当前加速度大于零（车辆仍在加速状态）】
             acc_prime_mask = self.action_library[:, 1] < 0  # 速度太快，屏蔽继续加速的动作
+        elif curr_velocity < speed_limit * 0.6 and prev_acc < 0:
+            acc_prime_mask = self.action_library[:, 1] > 0  # 速度太慢，屏蔽继续减速的动作
         else:
             acc_prime_mask = np.ones((len(self.action_library),), dtype=np.bool_)
         if curr_steer < -pi / 36:  # 前轮左转大于5°，屏蔽继续左转的动作
