@@ -199,11 +199,13 @@ class Processor:
 
         self.env_last_distance[env_id] = distance_with_target
 
-        if distance_with_target < self.phases_distances[env_id][-1]:
-            phase_reward = 50
-            self.phases_distances[env_id].pop()
-        else:
-            phase_reward = 0
+        # if distance_with_target < self.phases_distances[env_id][-1]:
+        #     phase_reward = 50
+        #     self.phases_distances[env_id].pop()
+        # else:
+        #     phase_reward = 0
+
+        phase_reward = 0
 
         step_reward = -1
 
