@@ -247,6 +247,12 @@ class Processor:
             turn_reward = 0
 
         # 压线 TODO: 压线的判据
+        over_line = False
+        if curr_xy[1] - 1.6 < 1 or curr_xy[1] + 1.6 > 1 + 3 * 3.75:
+            over_line = True
+            line_reward = -10
+        else:
+            line_reward = 0
 
         over_speed = False
         """
@@ -291,9 +297,9 @@ class Processor:
         # else:
         #     offset_reward = 0
 
-        if fastly_brake or big_turn or over_speed:
+        if fastly_brake or big_turn or over_speed or over_line:
             # TODO: 这里设置成了如果动作发犯规，则没有正奖励，避免一头撞死
-            rule_reward = 0  # brake_reward + turn_reward + high_speed_reward
+            rule_reward = brake_reward + turn_reward + high_speed_reward + line_reward  # 0
         else:
             rule_reward = distance_close + offset_reward
 
