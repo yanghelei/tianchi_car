@@ -279,15 +279,15 @@ class Processor:
         else:
             high_speed_reward = 0
 
-        # if current_lane_index != -1:
-        #     offset_reward = 1 / (abs(current_offset) + 1)
-        # else:
-        #     offset_reward = 0
-
-        if abs(current_offset) < 0.2:
-            offset_reward = 1
+        if current_lane_index != -1:
+            offset_reward = 1 / (abs(current_offset) + 1)
         else:
             offset_reward = 0
+
+        # if abs(current_offset) < 0.2:
+        #     offset_reward = 1
+        # else:
+        #     offset_reward = 0
 
         if fastly_brake or big_turn or over_speed:
             # TODO: 这里设置成了如果动作发犯规，则没有正奖励，避免一头撞死
