@@ -279,8 +279,13 @@ class Processor:
         else:
             high_speed_reward = 0
 
-        if current_lane_index != -1:
-            offset_reward = 0.3 / (abs(current_offset) + 1)
+        # if current_lane_index != -1:
+        #     offset_reward = 1 / (abs(current_offset) + 1)
+        # else:
+        #     offset_reward = 0
+
+        if abs(current_offset) < 0.2:
+            offset_reward = 1
         else:
             offset_reward = 0
 
