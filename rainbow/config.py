@@ -13,7 +13,7 @@ config = dict(
     exploration=dict(
         type='exp',
         start=0.95,
-        end=0.05,
+        end=0.10,
         decay=5e5
     ),
     # eps_train=0.1,
