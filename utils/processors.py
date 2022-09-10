@@ -199,13 +199,13 @@ class Processor:
 
         self.env_last_distance[env_id] = distance_with_target
 
-        # if distance_with_target < self.phases_distances[env_id][-1]:
-        #     phase_reward = 50
-        #     self.phases_distances[env_id].pop()
-        # else:
-        #     phase_reward = 0
+        if distance_with_target < self.phases_distances[env_id][-1]:
+            phase_reward = 50
+            self.phases_distances[env_id].pop()
+        else:
+            phase_reward = 0
 
-        phase_reward = 0
+        # phase_reward = 0
 
         step_reward = -1
 
@@ -299,7 +299,7 @@ class Processor:
 
         if fastly_brake or big_turn or over_speed or over_line:
             # TODO: 这里设置成了如果动作发犯规，则没有正奖励，避免一头撞死
-            rule_reward = brake_reward + turn_reward + high_speed_reward + line_reward  # 0
+            rule_reward = 0  # brake_reward + turn_reward + high_speed_reward + line_reward
         else:
             rule_reward = distance_close + offset_reward
 
