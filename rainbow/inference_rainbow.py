@@ -32,8 +32,8 @@ name = 'checkpoint.pth'
 
 def load_policy(cfgs, name):
 
-    def noisy_linear(x, y):
-        return NoisyLinear(x, y, cfgs.noisy_std)
+    # def noisy_linear(x, y):
+    #     return NoisyLinear(x, y, cfgs.noisy_std)
 
     _model = MyActor(
         cfgs,
@@ -41,7 +41,7 @@ def load_policy(cfgs, name):
         device=cfgs.device,
         softmax=True,
         num_atoms=cfgs.num_atoms,
-        dueling_param=({"linear_layer": noisy_linear}, {"linear_layer": noisy_linear}),
+        dueling_param=None,
     )
 
     optim = torch.optim.Adam(_model.parameters(), lr=cfgs.lr)
