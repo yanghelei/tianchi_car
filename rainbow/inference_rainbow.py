@@ -12,14 +12,12 @@ from multiprocessing import Pool
 sys.path.append(os.path.split(os.path.dirname(os.path.abspath(__file__)))[0] + '/')
 from geek.env.logger import Logger
 from geek.env.matrix_env import DoneReason, Scenarios
-from utils.processors import Processor
+from utils.processors import EvalProcessor
 
 logger = Logger.get_logger(__name__)
 
 torch.set_num_threads(1)
 
-from utils.processors import get_observation_for_test
-from ts_inherit.utils import to_torch_as, to_numpy
 from ts_inherit.rainbow_actor import MyActor
 from ts_inherit.rainbow import MyRainbow
 from tianshou.utils.net.discrete import NoisyLinear
@@ -38,7 +36,7 @@ def load_policy(cfgs, name):
         return NoisyLinear(x, y, cfgs.noisy_std)
 
     _model = MyActor(
-        cfgs.network,
+        cfgs,
         cfgs.action_shape,
         device=cfgs.device,
         softmax=True,
@@ -74,7 +72,7 @@ def load_policy(cfgs, name):
             logger.info("Successfully restore policy.")
         else:
             checkpoint = torch.load(ckpt_path, map_location=cfgs.device)
-            _policy.load_state_dict(checkpoint['model'])
+            _policy.load_state_dict(checkpoint)
             logger.info("Successfully restore policy.")
     else:
         logger.info(f"Fail to restore policy in {ckpt_path}!")
@@ -84,11 +82,13 @@ def load_policy(cfgs, name):
 
 def run(worker_index):
     try:
-        env = gym.make("MatrixEnv-v1", scenarios=Scenarios.INFERENCE)
+        env = gym.make("MatrixEnv-v1", scenarios=Scenarios.INFERENCE, render_id=str(worker_index))
         obs = env.reset()
         policy = load_policy(cfg, name)
+        policy.train(mode=False)
+        processor = EvalProcessor(cfg)
         while True:
-            data = get_observation_for_test(cfg=cfg, obs=obs)
+            data = processor.get_observation(observation=obs)
             result = policy(data)
             data.update(act=result.act)
             act = policy.map_action(data)[0]
@@ -96,6 +96,8 @@ def run(worker_index):
             infer_done = DoneReason.INFERENCE_DONE == info.get("DoneReason", "")
             if done and not infer_done:
                 obs = env.reset()
+                processor.reset()
+                logger.info(f"worker_{worker_index}: done!")
             elif infer_done:
                 break
     except Exception as e:
@@ -105,7 +107,7 @@ def run(worker_index):
 if __name__ == "__main__":
     torch.multiprocessing.set_start_method('spawn')
 
-    num_workers = 12
+    num_workers = 3
 
     pool = Pool(num_workers)
     pool_result = pool.map_async(run, list(range(num_workers)))
