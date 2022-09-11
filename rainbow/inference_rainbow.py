@@ -73,8 +73,9 @@ def load_policy(cfgs, name):
             _policy.load_state_dict(best_policy)
             logger.info("Successfully restore policy.")
         else:
-            checkpoint = torch.load(ckpt_path, map_location=cfgs.device)
-            _policy.load_state_dict(checkpoint)
+            # checkpoint = torch.load(ckpt_path, map_location=cfgs.device)
+            # _policy.load_state_dict(checkpoint)
+            _policy = torch.load(ckpt_path, map_location=cfgs.device)
             logger.info("Successfully restore policy.")
     else:
         logger.info(f"Fail to restore policy in {ckpt_path}!")
@@ -109,7 +110,7 @@ def run(worker_index):
 if __name__ == "__main__":
     torch.multiprocessing.set_start_method('spawn')
 
-    num_workers = 3
+    num_workers = 12
 
     pool = Pool(num_workers)
     pool_result = pool.map_async(run, list(range(num_workers)))

@@ -132,8 +132,8 @@ def train(cfgs):
         logger.logger.info(f"Loading agent under {log_path}")
         ckpt_path = os.path.join(log_path, "checkpoint.pth")
         if os.path.exists(ckpt_path):
-            # policy = torch.load(ckpt_path, map_location=cfgs.device)
-            policy.load_state_dict(torch.load(ckpt_path, map_location=cfgs.device))
+            policy = torch.load(ckpt_path, map_location=cfgs.device)
+            # policy.load_state_dict(torch.load(ckpt_path, map_location=cfgs.device))
             policy.add_iter()  # update次数加一，避免初始覆盖old_target
             logger.logger.info("Successfully restore policy and optim.")
         else:
