@@ -183,12 +183,40 @@ class EnvPostProcsser:
             end_reward = 0.0
         
         if observation['map'] is not None:
-            current_lane_index = observation["map"].lane_id
+            lane_list = []
+            for lane_info in observation["map"].lanes:
+                lane_list.append(lane_info.lane_id)
+            current_lane_index = lane_list.index(observation["map"].lane_id)
             current_offset = observation["map"].lane_offset
+            speed_limit = observation["map"].lanes[current_lane_index].speed_limit
         else:
             logger.info('map in obs is None!')
             current_lane_index = -1
             current_offset = 0
+            speed_limit = 27.78
+
+        # add penalty when reaching close to other cars (same lane)
+        length = observation["player"]['property'][1] # 车辆长度
+        width = observation["player"]['property'][0] # 车辆宽度
+        npc_info = observation['npcs'] 
+        same_lane_npcs = [] # 同车道 npc
+        for npc in npc_info:
+            if npc[0] == 0:
+                break
+            dy = npc[3] - observation["player"]['status'][1]
+            if np.abs(dy) < width:
+                same_lane_npcs.append(npc)
+        collide_reward = 0
+        for npc in same_lane_npcs:
+            safe_distance = (npc[-1] + length)/2 + length
+            dx = npc[2] - observation["player"]['status'][0]
+            if dx < 0:
+                if np.abs(dx) < safe_distance:
+                    penalty = -0.1-(safe_distance - np.abs(dx))*0.1
+                    collide_reward = min(collide_reward, penalty)
+        
+        if info['collided']:
+            collide_reward -= 10
 
         # add penalty when reaching close to other cars (same lane)
         length = observation["player"]['property'][1] # 车辆长度
@@ -213,13 +241,60 @@ class EnvPostProcsser:
         if info['collided']:
             collide_reward -= 10 
 
-        return distance_reward + end_reward + step_reward + collide_reward
+        speed = observation["player"]["status"][4]
+        acc_y = observation["player"]["status"][6]
+        acc_x = observation["player"]["status"][5]
+
+        last_acc_y = self.last_obs["player"]["status"][6]
+        last_acc_x = self.last_obs["player"]['status'][5]
+
+        acc_y_dealta = acc_y - last_acc_y
+        acc_x_dealta = acc_x - last_acc_x
+
+        acc_prime_reward = 0 
+        acc_reward = 0
+        speed_reward = 0
+        offset_reward = 0
+
+        # add penalty when make big turn 
+        if np.abs(acc_y) > 4:
+            acc_reward += -1
+        elif np.abs(acc_y) > 2:
+            acc_reward += -0.4 - (np.abs(acc_y) - 2)*0.3
+        if np.abs(acc_y_dealta) > 0.9:
+            acc_prime_reward += -1
+        elif np.abs(acc_y_dealta) > 0.7:
+            acc_prime_reward += -0.4 - (np.abs(acc_y_dealta) - 0.7)*3
+
+        # add penalty when make big jerk (x axis)
+        if np.abs(acc_x_dealta) > 0.9:
+            acc_prime_reward += -1
+        elif np.abs(acc_x_dealta) > 0.7:
+            acc_prime_reward += -0.4 - (np.abs(acc_x_dealta) - 0.7)*3
+
+        # add penalty when speed over limit
+        if speed > speed_limit:
+            speed_reward += -(speed - speed_limit)*0.1
+
+        # add penalty when offset is too large (lane width 3.75)
+        if current_lane_index == 2:
+            if np.abs(current_offset) > 0.5:
+                offset_reward += -(np.abs(current_offset)-0.5)*1
+
+        rule_reward = speed_reward + acc_reward + acc_prime_reward + offset_reward
+
+        self.last_obs = observation
+        # balance different reward 
+        total_reward = distance_reward + end_reward + step_reward + 10*collide_reward + 1*rule_reward 
+
+        return total_reward
 
     def reset(self, initial_obs):
         self.prev_distance = None
         self.pre_vec_obs = None
         self.pre_lane_index = 1
         self.pre_offset = 0
+        self.last_obs = initial_obs
         # self.reward_scale.reset()
         # self.img_deque = collections.deque(maxlen=5)
         # 填充初始帧

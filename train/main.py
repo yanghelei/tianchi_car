@@ -44,7 +44,7 @@ class MulProPPO:
         else:
             self.model = CategoricalPPOPolicy(CommonConfig.action_num).to(self.args.device)
         if load:
-            self._load_model(self.args.model_path)
+            self._load_model(self.args.model_path+f'/network_{start_episode}.pth')
             self.logger.info('Successfully load pre-trained model ')
         self.optimizer = opt.Adam(self.model.parameters(), lr=self.args.lr)
         if self.args.use_value_norm:

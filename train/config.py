@@ -31,10 +31,10 @@ class PolicyParam():
         num_epoch = 3
     else:
         num_workers: int = 15
-        random_episode: int = 0
+        random_episode: int = 10
         num_episode: int = 1000
-        batch_size: int =  6144
-        minibatch_size: int = 256
+        batch_size: int = 8392
+        minibatch_size: int = 512
         num_epoch: int = 3
 
     # trick use    
@@ -71,7 +71,7 @@ class PolicyParam():
 
     reload = False
 
-    model_path: str = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'categorical_ppo_v2' / 'network.pth')
+    model_path: str = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'categorical_ppo_v2')
     obs_type: str = "vec"
     img_width: int = 224
     img_length: int = 224
