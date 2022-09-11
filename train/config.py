@@ -17,9 +17,9 @@ class PolicyParam():
     seed: int = 1234
 
     debug = False
-    use_eval = False
+    use_eval = True
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
-    gaussian = True # 动作是否连续
+    gaussian = False # 动作是否连续
     action_repeat: int = 1 
 
     if debug:
@@ -71,7 +71,7 @@ class PolicyParam():
 
     reload = False
 
-    model_path: str = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'categorical_ppo_v1' / 'network.pth')
+    model_path: str = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'categorical_ppo_v2' / 'network.pth')
     obs_type: str = "vec"
     img_width: int = 224
     img_length: int = 224
@@ -86,6 +86,6 @@ class PolicyParam():
 
 class CommonConfig:
 
-    remote_path = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'categorical_ppo_v1')
+    remote_path = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'categorical_ppo_v2')
     env_action_space = Box(low=np.array([-0.3925, -2.0]), high=np.array([0.3925, 2.0]), dtype=np.float32)
     action_num = 121

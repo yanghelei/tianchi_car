@@ -86,6 +86,7 @@ class EnvPostProcsser:
             surr_obs_list.append(list(numpy.zeros(self.surr_vec_length)))
         # 截断 
         curr_surr_obs = numpy.array(surr_obs_list).reshape(-1)[: self.surr_number * 7]
+        curr_surr_obs = numpy.array(surr_obs_list)[: self.surr_number]
 
         return curr_surr_obs
 
@@ -191,13 +192,14 @@ class EnvPostProcsser:
 
         # add penalty when reaching close to other cars (same lane)
         length = observation["player"]['property'][1] # 车辆长度
+        width = observation["player"]['property'][0] # 车辆宽度
         npc_info = observation['npcs'] 
         same_lane_npcs = [] # 同车道 npc
         for npc in npc_info:
             if npc[0] == 0:
                 break
             dy = npc[3] - observation["player"]['status'][1]
-            if np.abs(dy) < length:
+            if np.abs(dy) < width:
                 same_lane_npcs.append(npc)
         collide_reward = 0
         for npc in same_lane_npcs:
@@ -226,8 +228,8 @@ class EnvPostProcsser:
         self.vec_deque = collections.deque(maxlen=5)
         self.surr_vec_deque = collections.deque(maxlen=5)
         for i in range(self.history_length):
-            self.vec_deque.append(ego_vec_state.flatten())
-            self.surr_vec_deque.append(sur_vec_state.flatten())
+            self.vec_deque.append(ego_vec_state)
+            self.surr_vec_deque.append(sur_vec_state)
         ego_vec_state = torch.from_numpy(numpy.array(list(self.vec_deque))).unsqueeze(0) # [1,5,8]
         sur_vec_state = torch.from_numpy(numpy.array(list(self.surr_vec_deque))).unsqueeze(0) # [1,5,8]
         return ego_vec_state, sur_vec_state

@@ -68,20 +68,31 @@ class Feature_Net(nn.Module):
     def __init__(self):
 
         super().__init__()
-        self.sur_feature_net = TimeVecFeatureNet(70, 5, 128)
-        self.ego_feature_net = TimeVecFeatureNet(8, 5, 128)
+        # self.sur_feature_net = TimeVecFeatureNet(70, 5, 128)
+        # self.ego_feature_net = TimeVecFeatureNet(8, 5, 128)
+        self.sur_feature_fc1 = orthogonal_init_(nn.Linear(7, 32))
+        self.sur_feature_fc2 = orthogonal_init_(nn.Linear(10*32, 128))
+        self.sur_feature_fc3 = orthogonal_init_(nn.Linear(128*5, 256))
+        self.ego_feature_fc1 = orthogonal_init_(nn.Linear(8, 32))
+        self.ego_feature_fc2 = orthogonal_init_(nn.Linear(32*5, 128))
+        
         # self.feature_net = nn.Sequential(
         #                    orthogonal_init_(nn.Linear(256, 256)), 
         #                    nn.ReLU())
     
     def forward(self, sur_obs, ego_obs):
-
-        ego_feature = self.ego_feature_net(ego_obs)
-        sur_feature = self.sur_feature_net(sur_obs)
+        B, T, N, _ = sur_obs.shape
+        sur_feature = F.relu(self.sur_feature_fc1(sur_obs)) # [B, T, N, dim]
+        sur_feature = F.relu(self.sur_feature_fc2(sur_feature.reshape(B, T,-1)))
+        sur_feature = F.relu(self.sur_feature_fc3(sur_feature.reshape(B, -1)))    
+        
+        ego_feature = F.relu(self.ego_feature_fc1(ego_obs))
+        ego_feature = F.relu(self.ego_feature_fc2(ego_feature.reshape(B, -1)))
         env_feature = torch.concat([ego_feature, sur_feature], dim=1)
-        # env_feature = self.feature_net(env_feature)
 
         return env_feature
+
+
 
 class PPOPolicy(nn.Module):
     def __init__(self, num_outputs):
@@ -102,7 +113,7 @@ class PPOPolicy(nn.Module):
             self.actor_net = nn.Sequential(
                 OrderedDict(
                     [
-                        ("actor_1", orthogonal_init_(nn.Linear(256, 256))),
+                        ("actor_1", orthogonal_init_(nn.Linear(384, 256))),
                         ("actor_relu_1", nn.ReLU()),
                         ("actor_2", orthogonal_init_(nn.Linear(256, 256))),
                         ("actor_relu_2", nn.ReLU()),
@@ -116,7 +127,7 @@ class PPOPolicy(nn.Module):
             self.actor_net = nn.Sequential(
                 OrderedDict(
                     [
-                        ("actor_1", orthogonal_init_(nn.Linear(256, 256))),
+                        ("actor_1", orthogonal_init_(nn.Linear(384, 256))),
                         ("actor_relu_1", nn.ReLU()),
                         ("actor_2", orthogonal_init_(nn.Linear(256, 256))),
                         ("actor_relu_2", nn.ReLU()),
@@ -128,7 +139,7 @@ class PPOPolicy(nn.Module):
         self.critic_net = nn.Sequential(
             OrderedDict(
                 [
-                    ("critic_1", orthogonal_init_(nn.Linear(256, 256))),
+                    ("critic_1", orthogonal_init_(nn.Linear(384, 256))),
                     ("critic_relu_1", nn.ReLU()),
                     ("critic_2", orthogonal_init_(nn.Linear(256, 256))),
                     ("critic_relu_2", nn.ReLU()),
@@ -250,7 +261,7 @@ class CategoricalPPOPolicy(nn.Module):
         self.actor_net = nn.Sequential(
             OrderedDict(
                 [
-                    ("actor_1", orthogonal_init_(nn.Linear(256, 256))),
+                    ("actor_1", orthogonal_init_(nn.Linear(384, 256))),
                     ("actor_relu_1", nn.ReLU()),
                     ("actor_mu", orthogonal_init_(nn.Linear(256, num_outputs), gain=0.01)),
                 ]
@@ -260,14 +271,14 @@ class CategoricalPPOPolicy(nn.Module):
         self.critic_net = nn.Sequential(
             OrderedDict(
                 [
-                    ("critic_1", orthogonal_init_(nn.Linear(256, 256))),
+                    ("critic_1", orthogonal_init_(nn.Linear(384, 256))),
                     ("critic_relu_1", nn.ReLU()),
                     ("critic_output", orthogonal_init_(nn.Linear(256, 1))),
                 ]
             )
         )
 
-        self.sur_obs_norm = Normalization(70)
+        self.sur_obs_norm = Normalization(7)
         self.ego_obs_norm = Normalization(8)
 
     def get_env_feature(self, sur_obs, ego_obs):

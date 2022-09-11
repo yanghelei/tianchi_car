@@ -345,8 +345,8 @@ class MulProPPO:
                                 ) 
                 self.log(memory, batch.reward, info, i_episode)
                 
-            if i_episode % self.args.eval_interval == 0 \
-                or i_episode == (self.args.num_episode-1) \
+            if (i_episode % self.args.eval_interval == 0 \
+                or i_episode == (self.args.num_episode-1)) \
                 and self.args.use_eval:
                 memory = self.sampler.eval(self.model, self.args.eval_episode)
                 batch = memory.sample()
