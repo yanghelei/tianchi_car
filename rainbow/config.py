@@ -13,7 +13,7 @@ config = dict(
     exploration=dict(
         type='exp',
         start=0.95,
-        end=0.10,
+        end=0.05,
         decay=5e5
     ),
     # eps_train=0.1,
@@ -28,7 +28,7 @@ config = dict(
     v_min=-10.0,
     v_max=10.0,
 
-    noisy_std=0.1,
+    noisy_std=0.2,
     n_step=5,  # the number of steps to look ahead. Default to 1.
     target_update_freq=3e4,  # 3e4
 
