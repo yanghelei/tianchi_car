@@ -43,7 +43,7 @@ config = dict(
     batch_size=256,  # the batch size of sample data, which is going to feed in the policy network
     # hidden_sizes=[128, 128],
 
-    training_num=1,  # 用于训练的环境数目
+    training_num=15,  # 用于训练的环境数目
     test_num=0,  # the number of episodes for one policy evaluation
 
     logdir='/myspace/rainbow_v4.0.0',

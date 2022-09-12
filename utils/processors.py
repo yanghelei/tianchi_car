@@ -418,16 +418,18 @@ class Processor:
             theta=car_status[2]
         )
 
-        npc_reward = self.get_npc_rewards(car_polygon, next_obs["npcs"])
+        npc_reward = self.get_npc_rewards(curr_xy, car_polygon, next_obs["npcs"])
 
         return end_reward + step_reward + rule_reward + npc_reward
 
-    def get_npc_rewards(self, car_polygon, npc_infos):
+    def get_npc_rewards(self, car_center, car_polygon, npc_infos):
         reward = 0
         for npc_info in npc_infos:
             if int(npc_info[0]) == 0:
                 continue
             npc_center = (npc_info[2], npc_info[3])
+            if compute_distance(pos_0=car_center, pos_1=npc_center) > 20:
+                continue
             npc_width = npc_info[9]
             npc_length = npc_info[10]
             npc_theta = npc_info[4]
