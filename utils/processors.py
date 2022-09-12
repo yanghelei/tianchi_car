@@ -1,11 +1,11 @@
-import gym
 import torch
 import itertools
 import numpy as np
 import collections
-from math import pi, inf
+from math import pi
 from tianshou.data import Batch
-from utils.math import compute_distance
+from utils.math import compute_distance, get_polygon
+from shapely.geometry import Polygon, LineString
 
 
 class EvalProcessor:
@@ -172,9 +172,6 @@ class Processor:
 
         self.envs_id = [i for i in range(self.n_env)]
         self.env_last_obs = [None] * self.n_env
-        self.env_last_distance = [0] * self.n_env
-
-        self.phases_distances = [[]] * self.n_env
 
         self.models = models
 
@@ -224,11 +221,14 @@ class Processor:
         prev_steer = observation["player"]["status"][7]  # 上一个前轮转角命令
         prev_acc = observation["player"]["status"][8]  # 上一个加速度命令
 
-        if prev_acc != curr_acc:
-            self.logger.info(f'Now forward acc is {curr_acc}, last action acc is {prev_acc}!')
+        car_polygon = get_polygon(
+            center=curr_xy,
+            length=self.cfgs.car.length,
+            width=self.cfgs.car.width,
+            theta=curr_yaw
+        )
 
         lane_list = []
-
         if observation["map"] is not None:
             speed_limit = 0.0
             for lane_info in observation["map"].lanes:
@@ -239,7 +239,7 @@ class Processor:
             current_offset = observation["map"].lane_offset
         else:  # 按照主办方的说法，车开到道路外有可能出现 none 的情况
             current_lane_index = -1.0
-            current_offset = 0.0
+            current_offset = 10.0
             speed_limit = 0.0
 
         ego_obs = np.array(
@@ -258,22 +258,31 @@ class Processor:
             ]]
         )
 
-        curr_xy = (observation["player"]["status"][0], observation["player"]["status"][1])  # 车辆后轴中心位置
         npc_info_dict = {}
-
         for npc_info in observation["npcs"]:
             if int(npc_info[0]) == 0:
                 continue
-            npc_info_dict[np.sqrt((npc_info[2] - curr_xy[0]) ** 2 + (npc_info[3] - curr_xy[1]) ** 2)] = [
+            npc_center = (npc_info[2], npc_info[3])
+            npc_width = npc_info[9]
+            npc_length = npc_info[10]
+            npc_theta = npc_info[4]
+
+            npc_polygon = get_polygon(
+                center=npc_center,
+                length=npc_length,
+                width=npc_width,
+                theta=npc_theta
+            )
+
+            safe_distance = car_polygon.distance(npc_polygon)
+
+            npc_info_dict[safe_distance] = [
+                safe_distance,
                 npc_info[2] - curr_xy[0],  # dx
                 npc_info[3] - curr_xy[1],  # dy
                 npc_info[4],  # 障碍物朝向
-                npc_info[5],  # vx
-                npc_info[6],  # vy
-                # np.sqrt(npc_info[5] ** 2 + npc_info[6] ** 2) - observation["player"]["status"][3],  # 障碍物速度大小（标量） - 当前车速度大小
-                npc_info[7],  # ax
-                npc_info[8],  # ay
-                # np.sqrt(npc_info[7] ** 2 + npc_info[8] ** 2),  # 障碍物加速度大小（标量）
+                np.sqrt(npc_info[5] ** 2 + npc_info[6] ** 2) - observation["player"]["status"][3],  # 障碍物速度大小（标量） - 当前车速度大小
+                np.sqrt(npc_info[7] ** 2 + npc_info[8] ** 2),  # 障碍物加速度大小（标量）
                 npc_info[9],  # 障碍物宽度
                 npc_info[10],  # 障碍物长度
             ]
@@ -315,12 +324,14 @@ class Processor:
             acc_prime_mask = self.action_library[:, 1] > 0  # 速度太慢，屏蔽继续减速的动作
         else:
             acc_prime_mask = np.ones((len(self.action_library),), dtype=np.bool_)
-        if curr_steer < -pi / 36:  # 前轮左转大于5°，屏蔽继续左转的动作
-            steer_prime_mask = self.action_library[:, 0] > 0
-        elif curr_steer > pi / 36:  # 前轮右转大于5°，屏蔽继续右转的动作
-            steer_prime_mask = self.action_library[:, 0] < 0
-        else:
-            steer_prime_mask = np.ones((len(self.action_library),), dtype=np.bool_)
+        # if curr_steer < -pi / 36:  # 前轮左转大于5°，屏蔽继续左转的动作
+        #     steer_prime_mask = self.action_library[:, 0] > 0
+        # elif curr_steer > pi / 36:  # 前轮右转大于5°，屏蔽继续右转的动作
+        #     steer_prime_mask = self.action_library[:, 0] < 0
+        # else:
+        #     steer_prime_mask = np.ones((len(self.action_library),), dtype=np.bool_)
+        steer_prime_mask = np.ones((len(self.action_library),), dtype=np.bool_)
+
         mask = acc_prime_mask & steer_prime_mask
 
         obs = dict(
@@ -338,26 +349,17 @@ class Processor:
         return obs
 
     def compute_reward(self, env_id, next_obs, info):
+        curr_xy = (next_obs["player"]["status"][0], next_obs["player"]["status"][1])
+        last_xy = (self.env_last_obs[env_id]["player"]["status"][0], self.env_last_obs[env_id]["player"]["status"][1])
+
         target_xy = (
             (next_obs["player"]["target"][0] + next_obs["player"]["target"][4]) / 2,
             (next_obs["player"]["target"][1] + next_obs["player"]["target"][5]) / 2,
         )
-        curr_xy = (next_obs["player"]["status"][0], next_obs["player"]["status"][1])
-        distance_with_target = compute_distance(target_xy, curr_xy)
 
-        assert self.env_last_distance[env_id] is not None
-
-        distance_close = self.env_last_distance[env_id] - distance_with_target
-
-        self.env_last_distance[env_id] = distance_with_target
-
-        if distance_with_target < self.phases_distances[env_id][-1]:
-            phase_reward = 50
-            self.phases_distances[env_id].pop()
-        else:
-            phase_reward = 0
-
-        # phase_reward = 0
+        curr_distance_with_target = compute_distance(target_xy, curr_xy)
+        last_distance_with_target = compute_distance(target_xy, last_xy)
+        distance_close = last_distance_with_target - curr_distance_with_target
 
         step_reward = -1
 
@@ -365,125 +367,81 @@ class Processor:
         last_car_status = self.env_last_obs[env_id]['player']['status']
 
         fastly_brake = False
-        """
-            急刹
-            判据: 1.纵向加速度绝对值大于2；
-                 2.纵向jerk绝对值大于0.9；
-            扣分: 10分每次，最高30；
-        """
         car_forward_acc = car_status[4]
-
-        if car_forward_acc != car_status[8]:
-            self.logger.info(f'Now forward acc is {car_forward_acc}, last action acc is {car_status[8]}!')
-
         last_car_forward_acc = last_car_status[4]
         if abs(car_forward_acc) > 2 or abs((last_car_forward_acc - car_forward_acc) / self.dt) > 0.9:
             fastly_brake = True
-            brake_reward = -10
-        else:
-            brake_reward = 0
 
         big_turn = False
-        """
-            大转向
-            判据: 1.横向加速度绝对值大于4；
-                 2.横向jerk绝对值大于0.9；
-            扣分: 10分每次，最高30；
-        """
         car_lateral_acc = car_status[5]
         last_car_lateral_acc = last_car_status[5]
         if abs(car_lateral_acc) > 4 or abs((car_lateral_acc - last_car_lateral_acc) / self.dt) > 0.9:
             big_turn = True
-            turn_reward = -10
-        else:
-            turn_reward = 0
 
-        # 压线 TODO: 压线的判据
-        over_line = False
-        if curr_xy[1] - 1.6 < 1 or curr_xy[1] + 1.6 > 1 + 3 * 3.75:
-            over_line = True
-            line_reward = -10
-        else:
-            line_reward = 0
-
-        over_speed = False
-        """
-            超速
-            判据: 1.车速超过当前车道上限的20%；
-                 2.或全程平均车速超过120km/h；
-            扣分: 15分每次，最高30
-            TODO: 全程平均车速尚未考虑
-        """
+        speed_accept_ratio = 1.0
         lane_list = []
         if next_obs["map"] is not None:
-            speed_limit = None
+            speed_limit = 0.0
             for lane_info in next_obs["map"].lanes:
                 lane_list.append(lane_info.lane_id)
                 if next_obs["map"].lane_id == lane_info.lane_id:
                     speed_limit = lane_info.speed_limit
                     break
-            current_lane_index = lane_list.index(next_obs["map"].lane_id)
             current_offset = next_obs["map"].lane_offset
-            if speed_limit is None:
-                speed_limit = 0.0
-                # self.logger.info('Env:' + str(env_id) + 'Not find current lane\'s speed limit!!!\tUse inf to keep running!')
         else:  # 按照主办方的说法，车开到道路外有可能出现 none 的情况
-            current_lane_index = -1.0
-            current_offset = 0.0
-            speed_limit = 0.0
-            # self.logger.info('Env:' + str(env_id) + 'next_obs[\'map\'] is None!!!\tUse inf as speed limit to keep running!')
+            current_offset = 10
+            speed_limit = 1.0
+
         car_speed = car_status[3]  # 当前车速
-        if car_speed > speed_limit or car_speed < speed_limit * 0.6:  # 当前车速超过车道限速或者小于车道限速的60%
-            over_speed = True
-            high_speed_reward = -15
-        else:
-            high_speed_reward = 0
+        if car_speed > speed_limit:  # 当前车速超过车道限速
+            over_speed_ratio = (car_speed - speed_limit) / speed_limit  # 超过规定限速的百分比
+            speed_accept_ratio = max((0.2 - over_speed_ratio) / 0.2, 0)
 
-        if current_lane_index != -1:
-            offset_reward = 1 / (abs(current_offset) + 1)
-        else:
-            offset_reward = 0
+        keep_line_center_ratio = max((0.5 - abs(current_offset)) / 0.5, 0)
 
-        # if abs(current_offset) < 0.2:
-        #     offset_reward = 1
-        # else:
-        #     offset_reward = 0
-
-        if fastly_brake or big_turn or over_speed or over_line:
-            # TODO: 这里设置成了如果动作发犯规，则没有正奖励，避免一头撞死
-            rule_reward = 0  # brake_reward + turn_reward + high_speed_reward + line_reward
+        if fastly_brake or big_turn:
+            rule_reward = -10
         else:
-            rule_reward = distance_close + offset_reward
+            rule_reward = distance_close * (1 + keep_line_center_ratio) * speed_accept_ratio
 
         if info["collided"]:  # 碰撞
             end_reward = -1000
         elif info["reached_stoparea"]:  #
             end_reward = 1000
-        # elif info["timeout"]:  # 超时未完成
-        #     end_reward = -100
         else:
             end_reward = 0.0  # 尚未 terminate
 
-        return end_reward + step_reward + rule_reward + phase_reward
-
-    def update_distance_to_target(self, env_id):
-        obs = self.env_last_obs[env_id]
-        assert obs is not None
-        target_xy = (
-            (obs["player"]["target"][0] + obs["player"]["target"][4]) / 2,
-            (obs["player"]["target"][1] + obs["player"]["target"][5]) / 2,
+        car_polygon = get_polygon(
+            center=curr_xy,
+            length=self.cfgs.car.length,
+            width=self.cfgs.car.width,
+            theta=car_status[2]
         )
-        curr_xy = (obs["player"]["status"][0], obs["player"]["status"][1])
-        self.env_last_distance[env_id] = compute_distance(target_xy, curr_xy)
-        self.get_phases(env_id)
 
-    def get_phases(self, env_id):
-        phases = list()
-        distance = 0
-        while distance < self.env_last_distance[env_id]:
-            phases.append(distance)
-            distance += 100
-        self.phases_distances[env_id] = phases
+        npc_reward = self.get_npc_rewards(car_polygon, next_obs["npcs"])
+
+        return end_reward + step_reward + rule_reward + npc_reward
+
+    def get_npc_rewards(self, car_polygon, npc_infos):
+        reward = 0
+        for npc_info in npc_infos:
+            if int(npc_info[0]) == 0:
+                continue
+            npc_center = (npc_info[2], npc_info[3])
+            npc_width = npc_info[9]
+            npc_length = npc_info[10]
+            npc_theta = npc_info[4]
+
+            npc_polygon = get_polygon(
+                center=npc_center,
+                length=npc_length,
+                width=npc_width,
+                theta=npc_theta
+            )
+            safe_distance = car_polygon.distance(npc_polygon)
+            if safe_distance < self.cfgs.dangerous_distance:
+                reward -= 10
+        return reward
 
     def preprocess_fn(self, **kwargs):
         # assert len(kwargs['env_id']) == len(self.envs_id)
@@ -503,7 +461,6 @@ class Processor:
             for _idx, _id in enumerate(kwargs['env_id']):
                 obs[_idx] = self.get_observation(kwargs['obs'][_idx], env_id=_id)
                 self.env_last_obs[_id] = kwargs['obs'][_idx]
-                self.update_distance_to_target(_id)
             obs = np.array(obs)
             return Batch(obs=obs)
 
