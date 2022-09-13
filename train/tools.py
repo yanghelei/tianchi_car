@@ -5,16 +5,12 @@
 
 import collections
 from copy import deepcopy
-import math
 import os
 from typing import Dict
 import traceback
 import numpy
 import torch
-import torch as ch
-import torch.nn as nn
 from train.config import PolicyParam
-from train.np_image import NPImage
 import numpy as np 
 from geek.env.logger import Logger
 
@@ -85,7 +81,6 @@ class EnvPostProcsser:
         for _ in range(self.surr_number - len(surr_obs_list)):
             surr_obs_list.append(list(numpy.zeros(self.surr_vec_length)))
         # 截断 
-        curr_surr_obs = numpy.array(surr_obs_list).reshape(-1)[: self.surr_number * 7]
         curr_surr_obs = numpy.array(surr_obs_list)[: self.surr_number]
 
         return curr_surr_obs
@@ -109,6 +104,9 @@ class EnvPostProcsser:
         delta_xy = (target_xy[0] - curr_xy[0], target_xy[1] - curr_xy[1]) # 目标区域与当前位置的绝对偏差
         curr_yaw = observation["player"]["status"][2] # 当前朝向
         curr_velocity = observation["player"]["status"][3] # 当前车辆后轴中心纵向速度
+        curr_velocity_prime = observation["player"]["status"][4] # 当前车辆后轴中心纵向加速度
+        curr_lateral_acc = observation["player"]["status"][5] # 当前车辆横向加速度
+        curr_wheel_angle = observation["player"]["status"][6] # 当前车辆前轮转角
         prev_steer = observation["player"]["status"][7] # 上一个前轮转角命令
         prev_acc = observation["player"]["status"][8] # 上一个加速度命令
         lane_list = []
@@ -131,6 +129,9 @@ class EnvPostProcsser:
                 delta_xy[1],  # 目标区域与当前位置的偏差y
                 curr_yaw,  # 当前车辆的朝向角
                 curr_velocity,  # 车辆后轴当前纵向速度
+                curr_velocity_prime,
+                curr_lateral_acc,
+                curr_wheel_angle,
                 prev_steer,  # 上一个前轮转角命令
                 prev_acc,  # 上一个加速度命令
                 current_lane_index,  # 当前所处车道的id
@@ -285,7 +286,7 @@ class EnvPostProcsser:
 
         self.last_obs = observation
         # balance different reward 
-        total_reward = distance_reward + end_reward + step_reward + 10*collide_reward + 1*rule_reward 
+        total_reward = distance_reward + end_reward + step_reward + 0*collide_reward + 0*rule_reward 
 
         return total_reward
 

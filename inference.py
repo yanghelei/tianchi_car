@@ -28,15 +28,7 @@ low_action = CommonConfig.env_action_space.low
 action_num = CommonConfig.action_num
 action_repeat = PolicyParam.action_repeat
 
-
-def set_actions_map(action_num):
-    #dicretise action space
-    forces = np.linspace(-2, 2, num=int(np.sqrt(action_num)), endpoint=True)
-    thetas = np.linspace(-0.3925, 0.3925, num=int(np.sqrt(action_num)), endpoint=True)
-    actions = [[force, theta] for force in forces for theta in thetas]
-    actions_map = {i:actions[i] for i in range(action_num)}
-    return actions_map 
-actions_map = set_actions_map(action_num)
+actions_map = EnvWorker._set_actions_map(action_num)
 def action_transform(action, gaussian) -> np.array :
     if gaussian:
         high_action = CommonConfig.env_action_space.high

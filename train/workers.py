@@ -83,11 +83,11 @@ class EnvWorker(mp.Process):
     @staticmethod
     def lmap(v: float, x: List, y: List) -> float:
         return y[0] + (v - x[0]) * (y[1] - y[0]) / (x[1] - x[0])
-
-    def _set_actions_map(self, action_num):
+    @staticmethod
+    def _set_actions_map(action_num):
         #dicretise action space
-        forces = np.linspace(-2, 2, num=int(np.sqrt(action_num)), endpoint=True)
-        thetas = np.linspace(-0.3925, 0.3925, num=int(np.sqrt(action_num)), endpoint=True)
+        forces = np.linspace(-0.75, 0.75, num=int(np.sqrt(action_num)), endpoint=True)
+        thetas = np.linspace(-0.13, 0.13, num=int(np.sqrt(action_num)), endpoint=True)
         actions = [[force, theta] for force in forces for theta in thetas]
         actions_map = {i:actions[i] for i in range(action_num)}
         return actions_map 
@@ -162,7 +162,7 @@ class EnvWorker(mp.Process):
                         vec_state, env_state = self.env_post_processer.reset(obs)
                         while Get_Enough_Batch.value == 0:
                             with torch.no_grad():
-                                action, gaussian_action, logproba, value = policy.select_action(env_state, vec_state, True)
+                                action, gaussian_action, logproba, value = policy.select_action(env_state, vec_state, False)
                                 env_state = env_state.data.cpu().numpy()[0]
                                 vec_state = vec_state.data.cpu().numpy()[0]
                             # 映射到环境动作

@@ -73,7 +73,7 @@ class Feature_Net(nn.Module):
         self.sur_feature_fc1 = orthogonal_init_(nn.Linear(7, 32))
         self.sur_feature_fc2 = orthogonal_init_(nn.Linear(10*32, 128))
         self.sur_feature_fc3 = orthogonal_init_(nn.Linear(128*5, 256))
-        self.ego_feature_fc1 = orthogonal_init_(nn.Linear(8, 32))
+        self.ego_feature_fc1 = orthogonal_init_(nn.Linear(11, 32))
         self.ego_feature_fc2 = orthogonal_init_(nn.Linear(32*5, 128))
         
         # self.feature_net = nn.Sequential(
@@ -148,8 +148,8 @@ class PPOPolicy(nn.Module):
             )
         )
 
-        self.sur_obs_norm = Normalization(70)
-        self.ego_obs_norm = Normalization(8)
+        self.sur_obs_norm = Normalization(7)
+        self.ego_obs_norm = Normalization(11)
 
     def get_env_feature(self, sur_obs, ego_obs):
         
@@ -279,7 +279,7 @@ class CategoricalPPOPolicy(nn.Module):
         )
 
         self.sur_obs_norm = Normalization(7)
-        self.ego_obs_norm = Normalization(8)
+        self.ego_obs_norm = Normalization(11)
 
     def get_env_feature(self, sur_obs, ego_obs):
         

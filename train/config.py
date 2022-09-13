@@ -32,7 +32,7 @@ class PolicyParam():
     else:
         num_workers: int = 15
         random_episode: int = 10
-        num_episode: int = 1000
+        num_episode: int = 1200
         batch_size: int = 8392
         minibatch_size: int = 512
         num_epoch: int = 3
@@ -53,7 +53,7 @@ class PolicyParam():
     save_num_episode: int = 100
     log_num_episode: int = 10
     eval_interval: int = 100
-    eval_episode: int = 100 
+    eval_episode: int = 200 
 
     # params
     gamma: float = 0.99
@@ -71,7 +71,7 @@ class PolicyParam():
 
     reload = False
 
-    model_path: str = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'categorical_ppo_v2')
+    model_path: str = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'categorical_ppo_v3')
     obs_type: str = "vec"
     img_width: int = 224
     img_length: int = 224
@@ -86,6 +86,6 @@ class PolicyParam():
 
 class CommonConfig:
 
-    remote_path = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'categorical_ppo_v2')
+    remote_path = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'categorical_ppo_v3')
     env_action_space = Box(low=np.array([-0.3925, -2.0]), high=np.array([0.3925, 2.0]), dtype=np.float32)
     action_num = 121
