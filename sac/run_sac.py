@@ -41,16 +41,16 @@ def train(cfgs):
     # model
     share_pre_net = PreNetworks(cfgs=cfgs)
 
-    # actor_pre = PreNetworks(cfgs=cfgs)
-    actor = Actor(share_pre_net, cfgs.action_shape, softmax_output=False, device=cfgs.device).to(cfgs.device)
+    actor_pre = PreNetworks(cfgs=cfgs)
+    actor = Actor(actor_pre, cfgs.action_shape, softmax_output=False, device=cfgs.device).to(cfgs.device)
     actor_optim = torch.optim.Adam(actor.parameters(), lr=cfgs.actor_lr)
 
-    # c1_pre = PreNetworks(cfgs=cfgs)
-    critic1 = Critic(share_pre_net, last_size=cfgs.action_shape, device=cfgs.device).to(cfgs.device)
+    c1_pre = PreNetworks(cfgs=cfgs)
+    critic1 = Critic(c1_pre, last_size=cfgs.action_shape, device=cfgs.device).to(cfgs.device)
     critic1_optim = torch.optim.Adam(critic1.parameters(), lr=cfgs.critic_lr)
 
-    # c2_pre = PreNetworks(cfgs=cfgs)
-    critic2 = Critic(share_pre_net, last_size=cfgs.action_shape, device=cfgs.device).to(cfgs.device)
+    c2_pre = PreNetworks(cfgs=cfgs)
+    critic2 = Critic(c2_pre, last_size=cfgs.action_shape, device=cfgs.device).to(cfgs.device)
     critic2_optim = torch.optim.Adam(critic2.parameters(), lr=cfgs.critic_lr)
 
     if cfgs.auto_alpha:
