@@ -11,11 +11,8 @@ from torch.utils.tensorboard import SummaryWriter
 
 from ts_inherit.logger import MyLogger
 
-from tianshou.env import SubprocVectorEnv, DummyVectorEnv
-from tianshou.data import PrioritizedVectorReplayBuffer, VectorReplayBuffer
-
-# from tianshou.utils.net.common import Net
-# from tianshou.utils.net.discrete import Actor, Critic
+from tianshou.env import SubprocVectorEnv
+from tianshou.data import VectorReplayBuffer
 
 from ts_inherit.sac_actor import Actor
 from ts_inherit.sac_critic import Critic
@@ -28,8 +25,8 @@ from utils.processors import set_seed, Processor
 
 def make_train_env(cfgs, render_id=None):
     if render_id is not None:
-        # env = gym.make(cfgs.task, scenarios=Scenarios.TRAINING)
-        env = gym.make(cfgs.task, scenarios=Scenarios.TRAINING, render_id=str(render_id))
+        env = gym.make(cfgs.task, scenarios=Scenarios.TRAINING)
+        # env = gym.make(cfgs.task, scenarios=Scenarios.TRAINING, render_id=str(render_id))
     else:
         env = gym.make(cfgs.task, scenarios=Scenarios.TRAINING)
     if not hasattr(env, 'action_space'):
@@ -39,20 +36,21 @@ def make_train_env(cfgs, render_id=None):
 
 def train(cfgs):
     train_envs = SubprocVectorEnv([lambda i=_i: make_train_env(cfgs, i) for _i in range(cfgs.training_num)])
-
     set_seed(seed=cfgs.seed)
 
     # model
-    actor_pre = PreNetworks(cfgs=cfgs)
-    actor = Actor(actor_pre, cfgs.action_shape, softmax_output=False, device=cfgs.device).to(cfgs.device)
+    share_pre_net = PreNetworks(cfgs=cfgs)
+
+    # actor_pre = PreNetworks(cfgs=cfgs)
+    actor = Actor(share_pre_net, cfgs.action_shape, softmax_output=False, device=cfgs.device).to(cfgs.device)
     actor_optim = torch.optim.Adam(actor.parameters(), lr=cfgs.actor_lr)
 
-    c1_pre = PreNetworks(cfgs=cfgs)
-    critic1 = Critic(c1_pre, last_size=cfgs.action_shape, device=cfgs.device).to(cfgs.device)
+    # c1_pre = PreNetworks(cfgs=cfgs)
+    critic1 = Critic(share_pre_net, last_size=cfgs.action_shape, device=cfgs.device).to(cfgs.device)
     critic1_optim = torch.optim.Adam(critic1.parameters(), lr=cfgs.critic_lr)
 
-    c2_pre = PreNetworks(cfgs=cfgs)
-    critic2 = Critic(c2_pre, last_size=cfgs.action_shape, device=cfgs.device).to(cfgs.device)
+    # c2_pre = PreNetworks(cfgs=cfgs)
+    critic2 = Critic(share_pre_net, last_size=cfgs.action_shape, device=cfgs.device).to(cfgs.device)
     critic2_optim = torch.optim.Adam(critic2.parameters(), lr=cfgs.critic_lr)
 
     if cfgs.auto_alpha:
@@ -90,7 +88,7 @@ def train(cfgs):
     train_processor = Processor(
         cfgs,
         tianchi_logger,
-        models=[actor_pre, c1_pre, c2_pre],
+        models=[share_pre_net],
         n_env=cfgs.training_num,
         update_norm=True
     )
@@ -100,8 +98,7 @@ def train(cfgs):
         policy,
         train_envs,
         VectorReplayBuffer(cfgs.buffer_size, len(train_envs)),
-        preprocess_fn=train_processor.preprocess_fn,
-        exploration_noise=True
+        preprocess_fn=train_processor.preprocess_fn
     )
     train_collector.set_logger(tianchi_logger, type='train')
 
@@ -111,7 +108,14 @@ def train(cfgs):
     def save_checkpoint_fn(epoch, env_step, gradient_step):
         # see also: https://pytorch.org/tutorials/beginner/saving_loading_models.html
         ckpt_path = os.path.join(log_path, "checkpoint.pth")
-        torch.save(policy.state_dict(), ckpt_path)
+        torch.save(
+            {
+                'model': policy.state_dict(),
+                'actor_optim': actor_optim.state_dict(),
+                'critic1_optim': critic1_optim.state_dict(),
+                'critic2_optim': critic2_optim.state_dict()
+            }, ckpt_path
+        )
         buffer_path = os.path.join(log_path, "train_buffer.pkl")
         pickle.dump(train_collector.buffer, open(buffer_path, "wb"))
         return ckpt_path
@@ -121,7 +125,11 @@ def train(cfgs):
         logger.logger.info(f"Loading agent under {log_path}")
         ckpt_path = os.path.join(log_path, "checkpoint.pth")
         if os.path.exists(ckpt_path):
-            policy.load_state_dict(torch.load(ckpt_path, map_location=cfgs.device))
+            check_point = torch.load(ckpt_path, map_location=cfgs.device)
+            policy.load_state_dict(check_point['model'])
+            policy.actor_optim.load_state_dict(check_point['actor_optim'])
+            policy.critic1_optim.load_state_dict(check_point['critic1_optim'])
+            policy.critic2_optim.load_state_dict(check_point['critic2_optim'])
             logger.logger.info("Successfully restore policy and optim.")
         else:
             logger.logger.info("Fail to restore policy and optim.")
@@ -146,17 +154,13 @@ def train(cfgs):
     result = sac_policy_trainer(
         policy=policy,
         train_collector=train_collector,
-        test_collector=None,  # 测试相关
+        test_collector=None,
         max_epoch=cfgs.epoch,
         step_per_epoch=cfgs.step_per_epoch,
         step_per_collect=cfgs.step_per_collect,
-        episode_per_test=0,  # 每次test多少个episode
+        episode_per_test=0,
         batch_size=cfgs.batch_size,
         update_per_step=cfgs.update_per_step,
-        train_fn=None,
-        test_fn=None,
-        stop_fn=None,
-        save_best_fn=None,
         logger=logger,
         show_progress=False,
         resume_from_log=cfgs.resume,

@@ -23,7 +23,8 @@ class TimeVecFeatureNet(nn.Module):
         input shape : [batch_size, vector_num, vector_length]
         """
         batch_size, _, _ = input.shape
-        layer_1_out = F.relu(self.layer_1(input)).permute(0, 2, 1).contiguous()
+        # layer_1_out = F.relu(self.layer_1(input)).permute(0, 2, 1).contiguous()
+        layer_1_out = input.permute(0, 2, 1).contiguous()
         layer_2_out = F.relu(self.layer_2(layer_1_out))
         layer_2_out = layer_2_out.view(batch_size, self.hidden_size)
         return layer_2_out
@@ -44,24 +45,22 @@ class PreNetworks(nn.Module):
                                hidden_sizes=cfgs.network.sur_hiddens,
                                device=self.device,
                                flatten_input=False)
-
         self.ego_project = MLP(input_dim=cfgs.network.ego_in,
                                output_dim=cfgs.network.ego_out,
                                hidden_sizes=cfgs.network.ego_hiddens,
                                device=self.device,
                                flatten_input=False)
-
-        self.project = MLP(input_dim=cfgs.network.sur_out+cfgs.network.ego_out,
-                           output_dim=cfgs.network.total_hiddens[-1],
-                           hidden_sizes=cfgs.network.total_hiddens,
+        self.project = MLP(input_dim=cfgs.network.sur_out + cfgs.network.ego_out,
+                           output_dim=cfgs.network.frame_out,
+                           hidden_sizes=cfgs.network.frame_hiddens,
                            device=self.device,
                            flatten_input=False)
 
-        self.output_dim = cfgs.network.total_hiddens[-1]
+        self.time_transform = TimeVecFeatureNet(input_shape=cfgs.network.frame_out,
+                                                num=cfgs.history_length,
+                                                hidden_size=cfgs.network.time_out)
 
-        self.time_transform = TimeVecFeatureNet(input_shape=self.output_dim,
-                                                num=5,
-                                                hidden_size=self.output_dim)
+        self.output_dim = cfgs.network.time_out
 
         self.tpdv = dict(dtype=torch.float32, device=self.device)
 
@@ -80,7 +79,7 @@ class PreNetworks(nn.Module):
         feats = torch.cat([sur_feat, ego_feat], dim=2)
         feats = self.project(feats)
 
-        # 聚合前5帧的信息
+        # 聚合历史n帧的信息
         feats = self.time_transform(feats)
 
         return feats, state
