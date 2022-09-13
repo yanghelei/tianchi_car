@@ -28,7 +28,7 @@ config = dict(
     v_min=-10.0,
     v_max=10.0,
 
-    noisy_std=0.2,
+    noisy_std=0.0,
     n_step=5,  # the number of steps to look ahead. Default to 1.
     target_update_freq=3e4,  # 3e4
 

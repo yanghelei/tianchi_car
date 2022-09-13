@@ -104,10 +104,11 @@ def train(cfgs):
     def train_fn(epoch, env_step):
         # 在每次训练前执行的操作
         if env_step >= cfgs.exploration.decay:
-            policy.set_eps(cfgs.exploration.end)
+            eps = cfgs.exploration.end
         else:
-            policy.set_eps((cfgs.exploration.start - cfgs.exploration.end) * (1 - env_step / cfgs.exploration.decay) + cfgs.exploration.end)
-
+            eps = (cfgs.exploration.start - cfgs.exploration.end) * (1 - env_step / cfgs.exploration.decay) + cfgs.exploration.end
+        policy.set_eps(eps)
+        tianchi_logger.info(f"Current eps is: {eps}.")
         # beta annealing, just a demo
         if cfgs.prioritized_replay:
             if env_step <= 10000:
