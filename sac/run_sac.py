@@ -88,7 +88,7 @@ def train(cfgs):
     train_processor = Processor(
         cfgs,
         tianchi_logger,
-        models=[share_pre_net],
+        models=[share_pre_net, actor_pre, c1_pre, c2_pre],
         n_env=cfgs.training_num,
         update_norm=True
     )
