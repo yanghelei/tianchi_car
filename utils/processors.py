@@ -189,10 +189,10 @@ class Processor:
         acc_prime_choice = cfgs.acc_prime_choice
         self.action_library = np.array(list(itertools.product(steer_prime_choices, acc_prime_choice)))
 
-        self.n_ego_vec_deque = [collections.deque(maxlen=self.cfgs.history_length)] * self.n_env
-        self.n_ego_n_deque = [collections.deque(maxlen=self.cfgs.history_length)] * self.n_env
-        self.n_sur_vec_deque = [collections.deque(maxlen=self.cfgs.history_length)] * self.n_env
-        self.n_sur_n_deque = [collections.deque(maxlen=self.cfgs.history_length)] * self.n_env
+        self.n_ego_vec_deque = [collections.deque(maxlen=self.cfgs.history_length) for _ in range(self.n_env)]
+        self.n_ego_n_deque = [collections.deque(maxlen=self.cfgs.history_length) for _ in range(self.n_env)]
+        self.n_sur_vec_deque = [collections.deque(maxlen=self.cfgs.history_length) for _ in range(self.n_env)]
+        self.n_sur_n_deque = [collections.deque(maxlen=self.cfgs.history_length) for _ in range(self.n_env)]
 
         self.reset_deque(self.envs_id)
 
@@ -448,22 +448,38 @@ class Processor:
     def preprocess_fn(self, **kwargs):
         # assert len(kwargs['env_id']) == len(self.envs_id)
         if 'rew' in kwargs:
-            obs_next = [None] * len(kwargs['env_id'])
-            rew = [0] * len(kwargs['env_id'])
-            for _idx, _id in enumerate(kwargs['env_id']):
-                obs_next[_idx] = self.get_observation(kwargs['obs_next'][_idx], env_id=_id)
-                rew[_idx] = self.compute_reward(_id, kwargs['obs_next'][_idx], kwargs['info'][_idx])
-                self.env_last_obs[_id] = kwargs['obs_next'][_idx]
+            n_ready_env = len(kwargs['env_id'])
+            obs_next = [None] * n_ready_env
+            rew = [0] * n_ready_env
+
+            if n_ready_env != len(kwargs['obs_next']):
+                ready_env_ids = kwargs['env_id']
+                len_obs_next = len(kwargs['obs_next'])
+                self.logger.info(f'Ready env id: {ready_env_ids}, len obs_next is: {len_obs_next}')
+
+            for idx in range(n_ready_env):
+                global_env_id = kwargs['env_id'][idx]
+                global_end_obs_next = kwargs['obs_next'][idx]
+                global_env_info = kwargs['info'][idx]
+
+                obs_next[idx] = self.get_observation(global_end_obs_next, env_id=global_env_id)
+                rew[idx] = self.compute_reward(global_env_id, global_end_obs_next, global_env_info)
+
+                self.env_last_obs[global_env_id] = global_end_obs_next
             obs_next = np.array(obs_next)
             rew = np.array(rew)
             return Batch(obs_next=obs_next, rew=rew, done=kwargs['done'], policy=kwargs['policy'])
         else:
             self.reset_deque(kwargs['env_id'])
-            obs = [None] * len(kwargs['env_id'])
-            for _idx, _id in enumerate(kwargs['env_id']):
-                obs[_idx] = self.get_observation(kwargs['obs'][_idx], env_id=_id)
-                self.env_last_obs[_id] = kwargs['obs'][_idx]
+            n_ready_env = len(kwargs['env_id'])
+            obs = [None] * n_ready_env
+            for idx in range(n_ready_env):
+                global_env_id = kwargs['env_id'][idx]
+                global_env_obs = kwargs['obs'][idx]
+                obs[idx] = self.get_observation(global_env_obs, env_id=global_env_id)
+                self.env_last_obs[global_env_id] = global_env_obs
             obs = np.array(obs)
+
             return Batch(obs=obs)
 
 

@@ -3,6 +3,8 @@ import numpy as np
 from math import pi
 from easydict import EasyDict
 
+from copy import deepcopy
+
 config = dict(
     exp_name='rainbow',
 
@@ -46,7 +48,7 @@ config = dict(
     training_num=15,  # 用于训练的环境数目
     test_num=0,  # the number of episodes for one policy evaluation
 
-    logdir='/myspace/rainbow_v4.0.0',
+    logdir='/myspace/rainbow_v5.0.0',
     render=0.0,
 
     prioritized_replay=True,
@@ -100,3 +102,12 @@ cfg = EasyDict(config)
 if __name__ == '__main__':
     a = np.linspace(-pi / 3.6, pi / 3.6, 11)  # 好像还是有点大
     print(a / pi * 180 * 0.1)
+
+_debug_cfg = deepcopy(cfg)
+_debug_cfg.buffer_size = 3e2
+_debug_cfg.step_per_epoch = 3e1
+_debug_cfg.step_per_collect = 16
+_debug_cfg.min_episode_per_collect = 1
+_debug_cfg.training_num = 4
+
+debug_cfg = _debug_cfg
