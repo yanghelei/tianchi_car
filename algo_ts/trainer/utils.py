@@ -19,8 +19,9 @@ def test_episode(
     reward_metric: Optional[Callable[[np.ndarray], np.ndarray]] = None,
 ) -> Dict[str, Any]:
     """A simple wrapper of testing policy in collector."""
+    # 不能重置buffer, 会破坏训练收集器收集的数据
     collector.reset_env()
-    collector.reset_buffer()
+    # collector.reset_buffer()
     policy.eval()
     if test_fn:
         test_fn(epoch, global_step)

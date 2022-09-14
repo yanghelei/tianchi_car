@@ -6,6 +6,7 @@ from torch.distributions import Categorical
 
 from algo_ts.data import Batch, ReplayBuffer, to_torch
 from algo_ts.policy import SACPolicy
+from train_ts.utils import ActionProjection
 
 
 class DiscreteSACPolicy(SACPolicy):
@@ -39,6 +40,7 @@ class DiscreteSACPolicy(SACPolicy):
 
     def __init__(
         self,
+        config,
         actor: torch.nn.Module,
         actor_optim: torch.optim.Optimizer,
         critic1: torch.nn.Module,
@@ -69,6 +71,8 @@ class DiscreteSACPolicy(SACPolicy):
             **kwargs
         )
         self._alpha: Union[float, torch.Tensor]
+        self.config = config
+        self.action_mapping = ActionProjection(config.low, config.high, config.action_per_dim)
 
     def forward(  # type: ignore
         self,
@@ -159,3 +163,10 @@ class DiscreteSACPolicy(SACPolicy):
     def exploration_noise(self, act: Union[np.ndarray, Batch],
                           batch: Batch) -> Union[np.ndarray, Batch]:
         return act
+
+    def map_action(self, act):
+        return self.action_mapping.get_action(act)
+
+
+
+

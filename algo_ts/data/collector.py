@@ -282,7 +282,6 @@ class Collector(object):
                 self.data.update(act=act_sample)
             else:
                 if no_grad:
-                    # todo: 可能因为这里断掉了前面的特征提取的网络反向传播
                     with torch.no_grad():  # faster than retain_grad version
                         # self.data.obs will be used by agent to get result
                         result = self.policy(self.data, last_state)
@@ -308,14 +307,15 @@ class Collector(object):
             result = self.env.step(action_remap, ready_env_ids)  # type: ignore
             obs_next, rew, done, info = result
 
-            self.data.update(obs_next=obs_next, rew=rew, done=done, info=info)
+            # preprocess first!
+            # self.data.update(obs_next=obs_next, rew=rew, done=done, info=info)
             if self.preprocess_fn:
                 self.data.update(
                     self.preprocess_fn(
-                        obs_next=self.data.obs_next,
-                        rew=self.data.rew,
-                        done=self.data.done,
-                        info=self.data.info,
+                        obs_next=obs_next,
+                        rew=rew,
+                        done=done,
+                        info=info,
                         policy=self.data.policy,
                         env_id=ready_env_ids,
                     )

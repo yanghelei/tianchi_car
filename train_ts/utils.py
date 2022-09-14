@@ -1,4 +1,5 @@
 import numpy as np
+import itertools
 
 
 def wrap(angle):
@@ -50,3 +51,19 @@ def cal_relative_rotation_angle(pos1: np.array, pos2: np.array, heading_angle):
         sin_value = -1.0
     rho = np.arcsin(sin_value)
     return angle if rho > 0 else wrap(2 * np.pi - angle)
+
+
+def cal_distance(pos1, pos2):
+    return np.sqrt(pow(pos1[0] - pos2[0], 2) + pow(pos1[1] - pos2[1], 2))
+
+
+class ActionProjection:
+    def __init__(self, low, high, action_per_dim):
+        mesh = [np.linspace(lo, hi, a) for lo, hi, a in zip(low, high, action_per_dim)]
+        self.action_library = list(itertools.product(*mesh))
+
+    def get_action(self, act):
+        assert len(act.shape) <= 2, f"Unknown action format with shape {act.shape}."
+        if len(act.shape) == 1:
+            return np.array([self.action_library[a] for a in act])
+        return np.array([[self.action_library[a] for a in a_] for a_ in act])

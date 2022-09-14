@@ -129,6 +129,8 @@ class BaseTrainer(ABC):
 
     def __init__(
         self,
+        sur_norm,
+        ego_norm,
         learning_type: str,
         policy: BasePolicy,
         max_epoch: int,
@@ -212,6 +214,9 @@ class BaseTrainer(ABC):
         self.stop_fn_flag = False
         self.iter_num = 0
 
+        self.sur_norm = sur_norm
+        self.ego_norm = ego_norm
+
     def reset(self) -> None:
         """Initialize or reset the instance to yield a new iterator from zero."""
         self.is_run = False
@@ -242,7 +247,7 @@ class BaseTrainer(ABC):
             self.best_reward, self.best_reward_std = \
                 test_result["rew"], test_result["rew_std"]
         if self.save_best_fn:
-            self.save_best_fn(self.policy)
+            self.save_best_fn(self.policy, self.sur_norm, self.ego_norm)
 
         self.epoch = self.start_epoch
         self.stop_fn_flag = False
@@ -311,7 +316,8 @@ class BaseTrainer(ABC):
                 self.epoch, self.env_step, self.gradient_step, self.save_checkpoint_fn
             )
             # test
-            if self.test_collector is not None:
+            # 由于不能利用新建的环境测试，使用训练收集器进行测试以保存模型
+            if self.train_collector is not None:
                 test_stat, self.stop_fn_flag = self.test_step()
                 if not self.is_run:
                     epoch_stat.update(test_stat)
@@ -338,11 +344,14 @@ class BaseTrainer(ABC):
 
     def test_step(self) -> Tuple[Dict[str, Any], bool]:
         """Perform one testing step."""
-        assert self.episode_per_test is not None
-        assert self.test_collector is not None
+        # assert self.episode_per_test is not None
+        # assert self.test_collector is not None
+        # 使用训练收集器进行测试
+        assert self.train_collector is not None
+        assert self.episode_per_test == self.train_collector.env_num
         stop_fn_flag = False
         test_result = test_episode(
-            self.policy, self.test_collector, self.test_fn, self.epoch,
+            self.policy, self.train_collector, self.test_fn, self.epoch,
             self.episode_per_test, self.logger, self.env_step, self.reward_metric
         )
         rew, rew_std = test_result["rew"], test_result["rew_std"]
@@ -351,7 +360,7 @@ class BaseTrainer(ABC):
             self.best_reward = float(rew)
             self.best_reward_std = rew_std
             if self.save_best_fn:
-                self.save_best_fn(self.policy)
+                self.save_best_fn(self.policy, self.sur_norm, self.ego_norm)
         if self.verbose:
             print(
                 f"Epoch #{self.epoch}: test_reward: {rew:.6f} ± {rew_std:.6f},"
