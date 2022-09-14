@@ -30,18 +30,14 @@ class SacPolicy(DiscreteSACPolicy):
         obs = data.obs['ego_obs']['data']
         act = data.act
 
-        if len(data.act.shape) == 1:
-            action = list()
-            for _idx in range(len(act)):
-                _act = act[_idx]
-                _steer_prime, _acc_prime = self.action_library[_act]
-                _steer = np.clip(obs[_idx][-1][0][5] + _steer_prime * cfg.dt, -pi / 36.0, pi / 36.0)
-                _acc = np.clip(obs[_idx][-1][0][7] + _acc_prime * cfg.dt, -2.0, 2.0)
-                action.append([_steer, _acc])
-            return np.array(action, dtype=np.float32)
-        # if len(data.act.shape) == 1:
-        #     return np.array([self.action_library[int(a)] for a in data.act])
-        # return np.array([[self.action_library[int(a)] for a in a_] for a_ in data.act])
+        action = list()
+        for _idx in range(len(act)):
+            _act = act[_idx]
+            _steer_prime, _acc_prime = self.action_library[_act]
+            _steer = np.clip(obs[_idx][-1][0][5] + _steer_prime * cfg.dt, -pi / 36.0, pi / 36.0)
+            _acc = np.clip(obs[_idx][-1][0][7] + _acc_prime * cfg.dt, -2.0, 2.0)
+            action.append([_steer, _acc])
+        return np.array(action, dtype=np.float32)
 
     def sync_weight(self) -> None:
         self.soft_update(self.critic1_old, self.critic1, self.tau)

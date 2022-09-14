@@ -71,6 +71,8 @@ class SacCollector(Collector):
 
             # get bounded and remapped actions first (not saved into buffer)
             action_remap = self.policy.map_action(self.data)
+            if len(action_remap) != len(ready_env_ids):
+                self.train_logger.info(f'Action length: {len(action_remap)}, Ready envs: {ready_env_ids}')
             # step in env
             result = self.env.step(action_remap, ready_env_ids)  # type: ignore
             obs_next, rew, done, info = result

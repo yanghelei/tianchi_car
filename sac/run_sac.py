@@ -171,9 +171,12 @@ def train(cfgs):
 if __name__ == '__main__':
     torch.set_num_threads(1)
 
-    from sac.config import cfg
+    from sac.config import cfg, debug_cfg
 
     cfg.action_space = gym.spaces.Discrete(cfg.action_per_dim[0] * cfg.action_per_dim[1])
     cfg.action_shape = cfg.action_space.n
+
+    debug_cfg.action_space = gym.spaces.Discrete(cfg.action_per_dim[0] * cfg.action_per_dim[1])
+    debug_cfg.action_shape = cfg.action_space.n
 
     train(cfgs=cfg)
