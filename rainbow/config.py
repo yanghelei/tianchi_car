@@ -30,7 +30,7 @@ config = dict(
     v_min=-10.0,
     v_max=10.0,
 
-    noisy_std=0.0,
+    noisy_std=0.15,
     n_step=5,  # the number of steps to look ahead. Default to 1.
     target_update_freq=3e4,  # 3e4
 
@@ -38,7 +38,7 @@ config = dict(
     step_per_epoch=3e4,  # the number of transitions collected per epoch
     step_per_collect=3e3,  # trainer will collect "step_per_collect" transitions and do some policy network update repeatedly in each epoch.
 
-    min_episode_per_collect=15 * 5,
+    min_episode_per_collect=15 * 3,
 
     update_per_step=1,
 

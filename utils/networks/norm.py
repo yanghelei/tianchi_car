@@ -15,11 +15,12 @@ class Normalization(nn.Module):
         self.epsilon = epsilon
         self.beta = beta
         self.per_element_update = per_element_update
+        self._tpdv = dict(dtype=torch.float32, device=torch.device("cpu"))
         self.tpdv = dict(dtype=torch.float32, device=device)
 
-        self.running_mean = nn.Parameter(torch.zeros(input_shape), requires_grad=False).to(**self.tpdv)
-        self.running_mean_sq = nn.Parameter(torch.zeros(input_shape), requires_grad=False).to(**self.tpdv)
-        self.debiasing_term = nn.Parameter(torch.tensor(0.0), requires_grad=False).to(**self.tpdv)
+        self.running_mean = nn.Parameter(torch.zeros(input_shape), requires_grad=False).to(**self._tpdv)
+        self.running_mean_sq = nn.Parameter(torch.zeros(input_shape), requires_grad=False).to(**self._tpdv)
+        self.debiasing_term = nn.Parameter(torch.tensor(0.0), requires_grad=False).to(**self._tpdv)
 
         self.reset_parameters()
 
@@ -68,7 +69,7 @@ class Normalization(nn.Module):
         """ Transform normalized data back into original distribution """
         if type(input_vector) == np.ndarray:
             input_vector = torch.from_numpy(input_vector)
-        input_vector = input_vector.to(**self.tpdv)
+        # input_vector = input_vector.to(**self.tpdv)
 
         mean, var = self.running_mean_var()
         out = input_vector * torch.sqrt(var)[(None,) * self.norm_axes] + mean[(None,) * self.norm_axes]
@@ -81,3 +82,28 @@ class Normalization(nn.Module):
 
         self.load_state_dict(torch.load(model_path, map_location=device))
 
+    def save_model(self, model_path):
+
+        torch.save(self.state_dict(), model_path)
+
+
+if __name__ == '__main__':
+    # norm = Normalization(input_shape=5)
+    norm = Normalization(input_shape=5, device='cuda')
+
+    # count = 0
+    # while count < 100:
+    #     a = np.array([count]*5)
+    #     norm.update(a)
+    #     b = np.ones(5)
+    #     new_a = norm.normalize(b)
+    #     count += 1
+    #
+    # torch.save(norm.state_dict(), './log_norm.pth')
+
+    # norm.load_state_dict(torch.load('./log_norm.pth'))
+    print(norm.state_dict())
+    # norm.load_model('./log_norm.pth', device='cpu')
+    # b = np.ones(5)
+    # new_b = norm.normalize(b)
+    # print(new_b)
