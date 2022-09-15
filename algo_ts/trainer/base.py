@@ -129,8 +129,6 @@ class BaseTrainer(ABC):
 
     def __init__(
         self,
-        sur_norm,
-        ego_norm,
         learning_type: str,
         policy: BasePolicy,
         max_epoch: int,
@@ -214,9 +212,6 @@ class BaseTrainer(ABC):
         self.stop_fn_flag = False
         self.iter_num = 0
 
-        self.sur_norm = sur_norm
-        self.ego_norm = ego_norm
-
     def reset(self) -> None:
         """Initialize or reset the instance to yield a new iterator from zero."""
         self.is_run = False
@@ -247,7 +242,7 @@ class BaseTrainer(ABC):
             self.best_reward, self.best_reward_std = \
                 test_result["rew"], test_result["rew_std"]
         if self.save_best_fn:
-            self.save_best_fn(self.policy, self.sur_norm, self.ego_norm)
+            self.save_best_fn(self.policy)
 
         self.epoch = self.start_epoch
         self.stop_fn_flag = False
@@ -360,7 +355,7 @@ class BaseTrainer(ABC):
             self.best_reward = float(rew)
             self.best_reward_std = rew_std
             if self.save_best_fn:
-                self.save_best_fn(self.policy, self.sur_norm, self.ego_norm)
+                self.save_best_fn(self.policy)
         if self.verbose:
             print(
                 f"Epoch #{self.epoch}: test_reward: {rew:.6f} ± {rew_std:.6f},"

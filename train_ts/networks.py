@@ -76,13 +76,15 @@ class MyActor(nn.Module):
 
         self.softmax_output = softmax_output
 
+        self.tpdv = dict(dtype=torch.float32, device=device)
+
     def pre_process(self, obs):
-        sur_obs_data = torch.from_numpy(obs['sur_obs'])  # dim: < env, history, feats >
+        sur_obs_data = torch.from_numpy(obs['sur_obs']).to(**self.tpdv)  # dim: < env, history, feats >
         sur_obs_data = self.sur_norm.normalize(sur_obs_data)
 
         sur_obs_data = self.sur_feature_net(sur_obs_data)  # dim: <env, history, new_feats_dim>
 
-        ego_obs_data = torch.from_numpy(obs['ego_obs'])
+        ego_obs_data = torch.from_numpy(obs['ego_obs']).to(**self.tpdv)
         ego_obs_data = self.ego_norm.normalize(ego_obs_data)
 
         ego_obs_data = self.ego_feature_net(ego_obs_data)
@@ -175,13 +177,15 @@ class MyCritic(nn.Module):
 
         self.output_dim = self.last.output_dim
 
+        self.tpdv = dict(dtype=torch.float32, device=device)
+
     def pre_process(self, obs):
-        sur_obs_data = torch.from_numpy(obs['sur_obs'])  # dim: < env, history, feats >
+        sur_obs_data = torch.from_numpy(obs['sur_obs']).to(**self.tpdv)  # dim: < env, history, feats >
         sur_obs_data = self.sur_norm.normalize(sur_obs_data)
 
         sur_obs_data = self.sur_feature_net(sur_obs_data)  # dim: <env, history, new_feats_dim>
 
-        ego_obs_data = torch.from_numpy(obs['ego_obs'])
+        ego_obs_data = torch.from_numpy(obs['ego_obs']).to(**self.tpdv)
         ego_obs_data = self.ego_norm.normalize(ego_obs_data)
 
         ego_obs_data = self.ego_feature_net(ego_obs_data)

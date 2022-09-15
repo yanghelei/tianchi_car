@@ -68,8 +68,6 @@ class OffpolicyTrainer(BaseTrainer):
     def __init__(
         self,
         policy: BasePolicy,
-        sur_norm,
-        ego_norm,
         train_collector: Collector,
         test_collector: Optional[Collector],
         max_epoch: int,
@@ -92,8 +90,6 @@ class OffpolicyTrainer(BaseTrainer):
         **kwargs: Any,
     ):
         super().__init__(
-            sur_norm,
-            ego_norm,
             learning_type="offpolicy",
             policy=policy,
             train_collector=train_collector,

@@ -31,8 +31,8 @@ class Processor:
 
         self.action_library = ActionProjection(cfgs.low, cfgs.high, cfgs.action_per_dim)
 
-        self.n_ego_vec_deque = [collections.deque(maxlen=self.cfgs.history_length)] * self.n_env
-        self.n_sur_vec_deque = [collections.deque(maxlen=self.cfgs.history_length)] * self.n_env
+        self.n_ego_vec_deque = [collections.deque(maxlen=self.cfgs.history_length) for _ in range(self.n_env)]
+        self.n_sur_vec_deque = [collections.deque(maxlen=self.cfgs.history_length) for _ in range(self.n_env)]
 
         self.reset_deque(self.envs_id)
 
@@ -146,9 +146,9 @@ class Processor:
         return obs
 
     def compute_reward(self, env_id, next_obs, info):
-        param1 = -0.1
-        param2 = -0.05
-        param3 = -0.02
+        param1 = 0.1
+        param2 = 0.05
+        param3 = 0.02
 
         curr_xy = (next_obs["player"]["status"][0], next_obs["player"]["status"][1])
         target_xy = (
@@ -178,7 +178,7 @@ class Processor:
             # dict(distance: npc_id)
             npc_distance_dict[distance_to_npc] = npc_info[0]
 
-        min_npc_distance = min(npc_distance_dict.keys())
+        min_npc_distance = min(npc_distance_dict.keys(), default=np.inf)
 
         escape_collision_reward = -param2 * (min_npc_distance <= 3.0)
 

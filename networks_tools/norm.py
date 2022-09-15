@@ -19,9 +19,9 @@ class Normalization(nn.Module):
         self.per_element_update = per_element_update
         self.tpdv = dict(dtype=torch.float32, device=device)
 
-        self.running_mean = nn.Parameter(torch.zeros(input_shape), requires_grad=False).to(**self.tpdv)
-        self.running_mean_sq = nn.Parameter(torch.zeros(input_shape), requires_grad=False).to(**self.tpdv)
-        self.debiasing_term = nn.Parameter(torch.tensor(0.0), requires_grad=False).to(**self.tpdv)
+        self.running_mean = nn.Parameter(torch.zeros(input_shape), requires_grad=True).to(**self.tpdv)
+        self.running_mean_sq = nn.Parameter(torch.zeros(input_shape), requires_grad=True).to(**self.tpdv)
+        self.debiasing_term = nn.Parameter(torch.tensor(0.0), requires_grad=True).to(**self.tpdv)
 
         self.reset_parameters()
 
@@ -40,7 +40,7 @@ class Normalization(nn.Module):
     def update(self, input_vector):
         if type(input_vector) == np.ndarray:
             input_vector = torch.from_numpy(input_vector)
-        input_vector = input_vector.to(**self.tpdv)
+        # input_vector = input_vector.to(**self.tpdv)
 
         batch_mean = input_vector.mean(dim=tuple(range(self.norm_axes)))
         batch_sq_mean = (input_vector ** 2).mean(dim=tuple(range(self.norm_axes)))
@@ -59,7 +59,7 @@ class Normalization(nn.Module):
         # Make sure input is float32
         if type(input_vector) == np.ndarray:
             input_vector = torch.from_numpy(input_vector)
-        input_vector = input_vector.to(**self.tpdv)
+        # input_vector = input_vector.to(**self.tpdv)
 
         mean, var = self.running_mean_var()
         out = (input_vector - mean[(None,) * self.norm_axes]) / torch.sqrt(var)[(None,) * self.norm_axes]
@@ -70,7 +70,7 @@ class Normalization(nn.Module):
         """ Transform normalized data back into original distribution """
         if type(input_vector) == np.ndarray:
             input_vector = torch.from_numpy(input_vector)
-        input_vector = input_vector.to(**self.tpdv)
+        # input_vector = input_vector.to(**self.tpdv)
 
         mean, var = self.running_mean_var()
         out = input_vector * torch.sqrt(var)[(None,) * self.norm_axes] + mean[(None,) * self.norm_axes]
@@ -89,8 +89,8 @@ class Normalization(nn.Module):
 
 
 if __name__ == '__main__':
-    # norm = Normalization(input_shape=5)
     norm = Normalization(input_shape=5, device='cuda')
+    # norm = Normalization(input_shape=5, device='cuda')
 
     # count = 0
     # while count < 100:

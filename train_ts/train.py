@@ -25,8 +25,11 @@ import torch.nn as nn
 
 from geek.env.matrix_env import Scenarios
 from train_ts.wrapper import Processor
-from train_ts.config import Config
+from train_ts.config import Config, CommonConfig
 from networks_tools.norm import Normalization
+from geek.env.logger import Logger
+
+logger_i = Logger.get_logger(__name__)
 
 
 class DiscreteSACPolicyTrainer:
@@ -54,7 +57,7 @@ class DiscreteSACPolicyTrainer:
     def train(self):
         # 线上运行补充参数，render_id=i
         train_envs = SubprocVectorEnv(
-            [lambda i=_i: self.make_envs(mode='train') for _i in range(self.config.training_num)]
+            [lambda i=_i: self.make_envs(mode='train', render_id=i) for _i in range(self.config.training_num)]
         )
 
         # seed
@@ -70,7 +73,7 @@ class DiscreteSACPolicyTrainer:
             config=self.config,
             sur_norm=sur_norm,
             ego_norm=ego_norm,
-            norm_layer=nn.LayerNorm,
+            # norm_layer=nn.LayerNorm,
             device=self.config.device,
         ).to(self.config.device)
 
@@ -79,14 +82,14 @@ class DiscreteSACPolicyTrainer:
         critic1 = MyCritic(self.config,
                            sur_norm=sur_norm,
                            ego_norm=ego_norm,
-                           norm_layer=nn.LayerNorm,
+                           # norm_layer=nn.LayerNorm,
                            device=self.config.device).to(self.config.device)
         critic1_optim = torch.optim.Adam(critic1.parameters(), lr=self.config.critic_lr)
 
         critic2 = MyCritic(self.config,
                            sur_norm=sur_norm,
                            ego_norm=ego_norm,
-                           norm_layer=nn.LayerNorm,
+                           # norm_layer=nn.LayerNorm,
                            device=self.config.device).to(self.config.device)
         critic2_optim = torch.optim.Adam(critic2.parameters(), lr=self.config.critic_lr)
 
@@ -128,18 +131,22 @@ class DiscreteSACPolicyTrainer:
         )
 
         # 进行一定数量的随机漫步，初始化norm的标准差和方差
-        # train_collector.collect(n_step=self.config.batch_size * self.config.training_num, random=True)
+        train_collector.collect(n_step=self.config.batch_size * self.config.training_num, random=True)
+        logger_i.info('finished random step!')
 
         # log
         log_path = os.path.join(self.config.logdir, self.config.task, 'sac')
         writer = SummaryWriter(log_path)
         logger = TensorboardLogger(writer)
 
-        def save_best_fn(policy, sur_norm, ego_norm):
+        def save_best_fn(policy):
             torch.save(policy.state_dict(), os.path.join(log_path, 'policy.pth'))
 
-            torch.save(sur_norm.state_dict(), os.path.join(log_path, 'sur_norm.pth'))
-            torch.save(ego_norm.state_dict(), os.path.join(log_path, 'ego_norm.pth'))
+            # 存储到云端
+            torch.save(
+                policy.state_dict(), remote_path + f"/policy.pth"
+            )
+            logger_i.info(f'model has been successfully saved : {remote_path}/policy.pth')
 
         def stop_fn(mean_rewards):
             return mean_rewards >= self.config.reward_threshold
@@ -147,8 +154,6 @@ class DiscreteSACPolicyTrainer:
         # trainer
         result = offpolicy_trainer(
             policy,
-            sur_norm,
-            ego_norm,
             train_collector,
             None,
             self.config.epoch,
@@ -168,4 +173,6 @@ class DiscreteSACPolicyTrainer:
 
 if __name__ == '__main__':
     s = DiscreteSACPolicyTrainer(Config)
+    remote_path = CommonConfig.remote_path
+    os.makedirs(remote_path, exist_ok=True)
     s.train()

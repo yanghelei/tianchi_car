@@ -22,21 +22,23 @@ from algo_ts.policy import DiscreteSACPolicy
 from algo_ts.data.batch import Batch
 import torch
 import torch.nn as nn
-from train_ts.config import Config
+from train_ts.config import Config, CommonConfig
 from networks_tools.norm import Normalization
 
 logger = Logger.get_logger(__name__)
 
+model_dir = CommonConfig.remote_path
+
 
 def load_model(config):
-    policy_path, sur_norm_path, ego_norm_path = get_model_path()
+    # 本地
+    # policy_path = get_model_path()
+    # 云端
+    policy_path = model_dir + f'/policy.pth'
 
     # 设置norm
-    sur_norm = Normalization(input_shape=config.max_consider_nps * config.sur_in)
-    ego_norm = Normalization(input_shape=1 * config.ego_in)
-
-    sur_norm.load_model(sur_norm_path, device='cpu')
-    ego_norm.load_model(ego_norm_path, device='cpu')
+    sur_norm = Normalization(input_shape=config.max_consider_nps * config.sur_in).to(config.device)
+    ego_norm = Normalization(input_shape=1 * config.ego_in).to(config.device)
 
     # model
     # MLP网络作为前置网络
@@ -86,6 +88,7 @@ def load_model(config):
     )
     # 加载模型
     policy.load_state_dict(torch.load(policy_path))
+    logger.info('model has been successfully loaded!')
 
     return policy
 
@@ -93,10 +96,8 @@ def load_model(config):
 def get_model_path():
     project_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     policy_path = os.path.join(project_path, 'tianchi_car', 'train_ts', 'log', 'MatrixEnv-v1', 'sac', 'policy.pth')
-    sur_norm_path = os.path.join(project_path, 'tianchi_car', 'train_ts', 'log', 'MatrixEnv-v1', 'sac', 'sur_norm.pth')
-    ego_norm_path = os.path.join(project_path, 'tianchi_car', 'train_ts', 'log', 'MatrixEnv-v1', 'sac', 'ego_norm.pth')
 
-    return policy_path, sur_norm_path, ego_norm_path
+    return policy_path
 
 
 def run(worker_index):
@@ -131,13 +132,12 @@ def run(worker_index):
 
 
 if __name__ == "__main__":
-    # torch.multiprocessing.set_start_method('spawn')
-    #
-    # num_workers = 12
-    #
-    # pool = Pool(num_workers)
-    # pool_result = pool.map_async(run, list(range(num_workers)))
-    # pool_result.wait(timeout=3000)
-    #
-    # logger.info("inference done.")
-    run(worker_index=0)
+    torch.multiprocessing.set_start_method('spawn')
+
+    num_workers = 12
+
+    pool = Pool(num_workers)
+    pool_result = pool.map_async(run, list(range(num_workers)))
+    pool_result.wait(timeout=3000)
+
+    logger.info("inference done.")
