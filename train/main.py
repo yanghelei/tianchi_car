@@ -346,7 +346,7 @@ class MulProPPO:
                 self.log(memory, batch.reward, info, i_episode)
                 
             if (i_episode % self.args.eval_interval == 0 \
-                or i_episode == (self.args.num_episode-1)) \
+                or i_episode == (self.args.num_episode+self.start_episode-1)) \
                 and self.args.use_eval:
                 memory = self.sampler.eval(self.model, self.args.eval_episode)
                 batch = memory.sample()
@@ -383,7 +383,7 @@ class MulProPPO:
 
             if i_episode % self.args.save_num_episode == 0 \
                 and i_episode > self.args.random_episode \
-                or i_episode == (self.args.num_episode-1):
+                or i_episode == (self.args.num_episode+self.start_episode-1):
                 torch.save(
                     self.model.state_dict(), self.model_dir + f"network_{i_episode}.pth"
                 )

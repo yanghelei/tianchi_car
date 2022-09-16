@@ -201,44 +201,36 @@ class EnvPostProcsser:
         width = observation["player"]['property'][0] # 车辆宽度
         npc_info = observation['npcs'] 
         same_lane_npcs = [] # 同车道 npc
+        neighbor_lane_npcs = [] # 不同车道 npc
         for npc in npc_info:
             if npc[0] == 0:
                 break
             dy = npc[3] - observation["player"]['status'][1]
-            if np.abs(dy) < width:
-                same_lane_npcs.append(npc)
-        collide_reward = 0
-        for npc in same_lane_npcs:
-            safe_distance = (npc[-1] + length)/2 + length
             dx = npc[2] - observation["player"]['status'][0]
-            if dx < 0:
-                if np.abs(dx) < safe_distance:
-                    penalty = -0.1-(safe_distance - np.abs(dx))*0.1
-                    collide_reward = min(collide_reward, penalty)
-        
-        if info['collided']:
-            collide_reward -= 10
+            if np.abs(dy) < (width + npc[-2])/2:
+                same_lane_npcs.append(npc)
+            if np.abs(dx) < (length + npc[-1])/2: # (车长 + npc车长)/2
+                neighbor_lane_npcs.append(npc)
 
-        # add penalty when reaching close to other cars (same lane)
-        length = observation["player"]['property'][1] # 车辆长度
-        width = observation["player"]['property'][0] # 车辆宽度
-        npc_info = observation['npcs'] 
-        same_lane_npcs = [] # 同车道 npc
-        for npc in npc_info:
-            if npc[0] == 0:
-                break
-            dy = npc[3] - observation["player"]['status'][1]
-            if np.abs(dy) < width:
-                same_lane_npcs.append(npc)
-        collide_reward = 0
+        collide_reward_1 = 0
         for npc in same_lane_npcs:
             safe_distance = (npc[-1] + length)/2 + length
             dx = npc[2] - observation["player"]['status'][0]
             if dx < 0:
                 if np.abs(dx) < safe_distance:
                     penalty = -0.1-(safe_distance - np.abs(dx))*0.1
-                    collide_reward = min(collide_reward, penalty)
+                    collide_reward_1 = min(collide_reward_1, penalty)
         
+        # add penalty when reaching close to other cars (different lane)
+        collide_reward_2 = 0
+        for npc in neighbor_lane_npcs:
+            safe_distance = ((npc[-2]) + width)/2 + 0.5
+            dy = npc[3] - observation["player"]['status'][1]
+            if np.abs(dy) < safe_distance:
+                penalty = -0.1-(safe_distance - np.abs(dy))*1
+                collide_reward_2 = min(collide_reward_2, penalty)
+
+        collide_reward = collide_reward_1 + collide_reward_2
         if info['collided']:
             collide_reward -= 10 
 
@@ -286,7 +278,7 @@ class EnvPostProcsser:
 
         self.last_obs = observation
         # balance different reward 
-        total_reward = distance_reward + end_reward + step_reward + 0*collide_reward + 0*rule_reward 
+        total_reward = distance_reward + end_reward + step_reward + 10*collide_reward + 0*rule_reward 
 
         return total_reward
 
