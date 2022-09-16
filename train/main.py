@@ -224,7 +224,7 @@ class MulProPPO:
                 if self.args.use_clip_grad:
                     nn.utils.clip_grad_norm_(self.model.parameters(), self.args.max_grad_norm)
                 # before training , rollout out some random episode to initiate
-                if episode >= self.args.random_episode:
+                if episode >= (self.start_episode + self.args.random_episode):
                     self.optimizer.step()
 
         # update normalization 
@@ -382,7 +382,7 @@ class MulProPPO:
                 self.writer.show('mean_step')
 
             if i_episode % self.args.save_num_episode == 0 \
-                and i_episode > self.args.random_episode \
+                and i_episode > (self.start_episode+self.args.random_episode) \
                 or i_episode == (self.args.num_episode+self.start_episode-1):
                 torch.save(
                     self.model.state_dict(), self.model_dir + f"network_{i_episode}.pth"
