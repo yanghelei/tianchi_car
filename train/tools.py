@@ -278,7 +278,7 @@ class EnvPostProcsser:
 
         self.last_obs = observation
         # balance different reward 
-        total_reward = distance_reward + end_reward + step_reward + 10*collide_reward + 0*rule_reward 
+        total_reward = distance_reward + end_reward + step_reward + 0*collide_reward + 0*rule_reward 
 
         return total_reward
 

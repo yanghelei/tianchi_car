@@ -34,7 +34,7 @@ class PolicyParam():
         random_episode: int = 10
         num_episode: int = 1200
         batch_size: int = 8392
-        minibatch_size: int = 512
+        minibatch_size: int = 1024
         num_epoch: int = 3
 
     # trick use    
@@ -59,7 +59,7 @@ class PolicyParam():
     gamma: float = 0.99
     lamda: float = 0.95
     loss_coeff_value: float = 0.5
-    loss_coeff_entropy: float = 0.01
+    loss_coeff_entropy: float = 0.005
     max_grad_norm: float = 0.5
     clip: float = 0.2
     lr: float = 1e-4
