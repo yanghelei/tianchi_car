@@ -33,7 +33,7 @@ class PolicyParam():
         num_workers: int = 15
         random_episode: int = 10
         num_episode: int = 1200
-        batch_size: int = 8392
+        batch_size: int = 8392*2
         minibatch_size: int = 1024
         num_epoch: int = 3
 
@@ -62,7 +62,7 @@ class PolicyParam():
     loss_coeff_entropy: float = 0.005
     max_grad_norm: float = 0.5
     clip: float = 0.2
-    lr: float = 1e-4
+    lr: float = 1e-4*0.5
     vf_clip_param: float = 0.5
     target_kl = 0.03
     #field 用法??
