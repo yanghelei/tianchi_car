@@ -71,7 +71,7 @@ config = dict(
         sur_hiddens=[],
         sur_out=64,
 
-        ego_in=12,
+        ego_in=11,
         ego_hiddens=[],
         ego_out=32,
 
