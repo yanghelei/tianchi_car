@@ -242,8 +242,11 @@ class Processor:
             current_offset = 10.0
             speed_limit = 0.0
 
+        distance_to_goal = compute_distance(curr_xy, target_xy)
+
         ego_obs = np.array(
             [[
+                distance_to_goal,
                 delta_xy[0],  # 目标区域与当前位置的偏差x
                 delta_xy[1],  # 目标区域与当前位置的偏差y
                 curr_yaw,  # 当前车辆的朝向角

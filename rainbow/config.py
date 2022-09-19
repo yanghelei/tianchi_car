@@ -21,7 +21,7 @@ config = dict(
     # eps_train=0.1,
     eps_test=0.01,
 
-    buffer_size=3e5,
+    buffer_size=3e6,
 
     lr=1e-4,
     gamma=0.99,
@@ -32,7 +32,7 @@ config = dict(
 
     noisy_std=0.15,
     n_step=5,  # the number of steps to look ahead. Default to 1.
-    target_update_freq=1.5e4,  # 3e4
+    target_update_freq=3e4,  # 3e4
 
     epoch=1e7,
     step_per_epoch=3e4,  # the number of transitions collected per epoch
@@ -48,7 +48,7 @@ config = dict(
     training_num=15,  # 用于训练的环境数目
     test_num=0,  # the number of episodes for one policy evaluation
 
-    logdir='/myspace/rainbow_v5.2.0',
+    logdir='/myspace/rainbow_v5.3.0',
     render=0.0,
 
     prioritized_replay=True,
@@ -71,7 +71,7 @@ config = dict(
         sur_hiddens=[],
         sur_out=64,
 
-        ego_in=11,
+        ego_in=12,
         ego_hiddens=[],
         ego_out=32,
 
@@ -86,7 +86,7 @@ config = dict(
 
     max_consider_nps=7,
     dt=0.1,
-    history_length=10,
+    history_length=5,
 
     car=dict(
         width=2.11,

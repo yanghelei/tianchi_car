@@ -51,25 +51,29 @@ class MyActor(nn.Module):
         self.sur_norm = Normalization(input_shape=cfgs.network.sur_in, device=self.device)
         self.ego_norm = Normalization(input_shape=cfgs.network.ego_in, device=self.device)
 
-        self.sur_project = MLP(input_dim=cfgs.network.sur_in,
-                               output_dim=cfgs.network.sur_out,
-                               hidden_sizes=cfgs.network.sur_hiddens,
-                               device=self.device,
-                               flatten_input=False)
+        self.sur_project = nn.GRU(input_size=cfgs.network.sur_in,
+                                  hidden_size=cfgs.network.sur_out,
+                                  num_layers=1,
+                                  batch_first=True,
+                                  bidirectional=True)
+
         self.ego_project = MLP(input_dim=cfgs.network.ego_in,
                                output_dim=cfgs.network.ego_out,
                                hidden_sizes=cfgs.network.ego_hiddens,
                                device=self.device,
                                flatten_input=False)
-        self.project = MLP(input_dim=cfgs.network.sur_out + cfgs.network.ego_out,
+
+        self.project = MLP(input_dim=cfgs.network.sur_out * 2 + cfgs.network.ego_out,
                            output_dim=cfgs.network.frame_out,
                            hidden_sizes=cfgs.network.frame_hiddens,
                            device=self.device,
                            flatten_input=False)
 
-        self.time_transform = TimeVecFeatureNet(input_shape=cfgs.network.frame_out,
-                                                num=cfgs.history_length,
-                                                hidden_size=cfgs.network.time_out)
+        self.time_project = nn.GRU(input_size=cfgs.network.frame_out,
+                                   hidden_size=cfgs.network.time_out,
+                                   num_layers=1,
+                                   batch_first=True,
+                                   bidirectional=False)
 
         self.output_dim = cfgs.network.time_out
 
@@ -120,8 +124,11 @@ class MyActor(nn.Module):
 
         sur_obs_data = check(obs['sur_obs']["data"]).to(**self.tpdv)
         sur_obs_data = self.sur_norm.normalize(sur_obs_data)
-        sur_feat = self.sur_project(sur_obs_data)
-        sur_feat = torch.mean(sur_feat, dim=2, keepdim=False)  # dim: <env, history, agent, feat>
+        n, history, n_nps, feat = sur_obs_data.size()
+        sur_obs_data = sur_obs_data.view(-1, n_nps, feat)
+        _, sur_feat = self.sur_project(sur_obs_data)
+        sur_feat = sur_feat.permute(1, 0, 2).contiguous()
+        sur_feat = sur_feat.view(n, history, -1)  # dim: <env, history, feat>
 
         ego_obs_data = check(obs['ego_obs']["data"]).to(**self.tpdv)
         ego_obs_data = self.ego_norm.normalize(ego_obs_data)
@@ -131,8 +138,8 @@ class MyActor(nn.Module):
         feats = torch.cat([sur_feat, ego_feat], dim=2)
         feats = self.project(feats)
 
-        # 聚合前5帧的信息
-        feats = self.time_transform(feats)
+        _, feats = self.time_project(feats)
+        feats = feats.squeeze()
 
         return feats
 
