@@ -400,7 +400,10 @@ class Processor:
             over_speed_ratio = (car_speed - speed_limit) / speed_limit  # 超过规定限速的百分比
             speed_accept_ratio = max((0.2 - over_speed_ratio) / 0.2, 0)
 
-        keep_line_center_ratio = max((0.5 - abs(current_offset)) / 0.5, 0)
+        if (curr_xy[1] - 2.11/2) < 1 or (curr_xy[1] + 2.11/2) > (1 + 3.75 * 3):
+            keep_line_center_ratio = -1
+        else:
+            keep_line_center_ratio = max((0.5 - abs(current_offset)) / 0.5, 0)
 
         if fastly_brake or big_turn:
             rule_reward = -10

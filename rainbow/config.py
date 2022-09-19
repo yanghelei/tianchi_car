@@ -21,7 +21,7 @@ config = dict(
     # eps_train=0.1,
     eps_test=0.01,
 
-    buffer_size=3e6,
+    buffer_size=1e6,
 
     lr=1e-4,
     gamma=0.99,
