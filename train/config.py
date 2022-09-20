@@ -75,8 +75,8 @@ class PolicyParam():
     obs_type: str = "vec"
     img_width: int = 224
     img_length: int = 224
-    ego_vec_length: int = 8
-    surr_vec_length: int = 7
+    ego_vec_length: int = 11
+    surr_vec_length: int = 8
     surr_agent_number: int = 10
     history_length: int = 5
     state_norm: bool = False

@@ -13,6 +13,7 @@ import torch
 from train.config import PolicyParam
 import numpy as np 
 from geek.env.logger import Logger
+from utils.geometry import get_polygon
 
 logger = Logger.get_logger(__name__)
 STD = 2 ** 0.5
@@ -58,14 +59,34 @@ class EnvPostProcsser:
 
         curr_xy = (observation["player"]["status"][0],  # 车辆后轴中心位置 x
                    observation["player"]["status"][1])  # 车辆后轴中心位置 y 
+        length = observation['player']['property'][0]
+        width = observation['player']['property'][1]
+        theta = observation["player"]["status"][2]
+
+        car_polygon = get_polygon(
+            center=curr_xy,
+            length=length,
+            width=width,
+            theta=theta,
+        )
+
         npc_info_dict = {}
         
         for npc_info in observation["npcs"]:
             if int(npc_info[0]) == 0:
                 continue
+
+            npc_polygon = get_polygon(
+                center=(npc_info[2], npc_info[3]),
+                length=npc_info[9],
+                width=npc_info[10],
+                theta=npc_info[4]
+            )
+            dist = car_polygon.distance(npc_polygon)
             npc_info_dict[
-                numpy.sqrt((npc_info[2] - curr_xy[0]) ** 2 + (npc_info[3] - curr_xy[1]) ** 2)
+                dist
             ] = [
+                dist,
                 npc_info[2] - curr_xy[0], # dx
                 npc_info[3] - curr_xy[1], # dy
                 npc_info[4], # 障碍物朝向
