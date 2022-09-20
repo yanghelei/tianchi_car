@@ -88,4 +88,4 @@ class CommonConfig:
 
     remote_path = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'categorical_ppo_v3')
     env_action_space = Box(low=np.array([-0.3925, -2.0]), high=np.array([0.3925, 2.0]), dtype=np.float32)
-    action_num = 121
+    action_num = 231

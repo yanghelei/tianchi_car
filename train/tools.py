@@ -27,7 +27,7 @@ def file_name(file_dir, file_type):
     return L
 
 class EnvPostProcsser:
-    def __init__(self) -> None:
+    def __init__(self, stage) -> None:
         self.args = PolicyParam
 
         self.target_speed = self.args.target_speed
@@ -47,7 +47,7 @@ class EnvPostProcsser:
         # running mean std 
         self.surr_vec_deque = collections.deque(maxlen=self.history_length)
         self.vec_deque = collections.deque(maxlen=self.history_length)
-        
+        self.stage = stage 
         for i in range(self.history_length):
             # self.surr_img_deque.append(numpy.zeros((self.img_width, self.img_length, 3)))
             self.surr_vec_deque.append(numpy.zeros((1, self.surr_number * self.surr_vec_length)))
@@ -277,8 +277,13 @@ class EnvPostProcsser:
         rule_reward = speed_reward + acc_reward + acc_prime_reward + offset_reward
 
         self.last_obs = observation
+        base_reward = distance_reward + end_reward + step_reward
         # balance different reward 
-        total_reward = distance_reward + end_reward + step_reward + 0*collide_reward + 0*rule_reward 
+        collide_reward_balance = 0 
+        rule_reward_balance = 0
+        if self.stage == 2:
+            rule_reward_balance = 1
+        total_reward = base_reward + collide_reward_balance*collide_reward + rule_reward_balance*rule_reward 
 
         return total_reward
 

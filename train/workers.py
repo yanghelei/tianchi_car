@@ -64,19 +64,19 @@ class Memory(object):
 
 
 class EnvWorker(mp.Process):
-    def __init__(self, remote, queue, lock, seed, worker_index):
+    def __init__(self, remote, queue, lock, seed, worker_index, stage):
         super(EnvWorker, self).__init__()
         self.worker_index = worker_index
         self.remote = remote
         self.queue = queue
         self.lock = lock
         self.gaussian = PolicyParam.gaussian
-        self.env_post_processer = EnvPostProcsser()
+        self.env_post_processer = EnvPostProcsser(stage)
         self.env_action_space = CommonConfig.env_action_space
         self.action_num =  CommonConfig.action_num
         self.action_repeat = PolicyParam.action_repeat
         if not self.gaussian:
-            self.actions_map = self._set_actions_map(121)
+            self.actions_map = self._set_actions_map(self.action_num)
         torch.manual_seed(seed)
         np.random.seed(seed)
     
@@ -86,8 +86,8 @@ class EnvWorker(mp.Process):
     @staticmethod
     def _set_actions_map(action_num):
         #dicretise action space
-        forces = np.linspace(-0.75, 0.75, num=int(np.sqrt(action_num)), endpoint=True)
-        thetas = np.linspace(-0.13, 0.13, num=int(np.sqrt(action_num)), endpoint=True)
+        forces = np.linspace(-0.5, 0.5, num=11, endpoint=True)
+        thetas = np.linspace(-0.08, 0.08, num=21, endpoint=True) # 5 度
         actions = [[force, theta] for force in forces for theta in thetas]
         actions_map = {i:actions[i] for i in range(action_num)}
         return actions_map 
@@ -207,7 +207,7 @@ class EnvWorker(mp.Process):
 
 
 class MemorySampler(object):
-    def __init__(self, args, logger):
+    def __init__(self, args, logger, stage):
         self.logger = logger
         self.args = args
         self.num_workers = args.num_workers
@@ -215,13 +215,13 @@ class MemorySampler(object):
         self.batch_size = args.batch_size
         self.device = args.device
         self.obs_type = args.obs_type
-
+        self.stage = stage
         self.queue = mp.Queue()
         self.lock = mp.Lock()
 
         self.remotes, self.work_remotes = zip(*[mp.Pipe() for _ in range(self.num_workers)])
         self.workers = [
-            EnvWorker(remote, self.queue, self.lock, args.seed + index, index)
+            EnvWorker(remote, self.queue, self.lock, args.seed + index, index, stage)
             for index, remote in enumerate(self.work_remotes)
         ]
 

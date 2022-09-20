@@ -24,13 +24,14 @@ from ai_hub import Logger as Writer
 logger = Logger.get_logger(__name__)
 
 class MulProPPO:
-    def __init__(self, logger, task_name, load, start_episode):
+    def __init__(self, logger, task_name, load, start_episode, stage):
         self.args = PolicyParam
         self.logger = logger
         self.global_sample_size = 0
         self.task_name = task_name
         self.load = load
         self.start_episode = start_episode
+        self.stage = stage
         self._make_dir()
 
         torch.manual_seed(self.args.seed)
@@ -38,7 +39,7 @@ class MulProPPO:
         if self.args.device == "cuda":
             torch.cuda.manual_seed(self.args.seed)
 
-        self.sampler = MemorySampler(self.args, self.logger)
+        self.sampler = MemorySampler(self.args, self.logger, stage)
         if self.args.gaussian:
             self.model = PPOPolicy(2).to(self.args.device)
         else:
@@ -401,9 +402,10 @@ if __name__ == "__main__":
     parser.add_argument('--task_name', type=str, default='Base_PPO')
     parser.add_argument('--load', action='store_true', default=False)
     parser.add_argument('--start_episode', type=int, default=0)
+    parser.add_argument('--stage', type=int, default=1)
     args = parser.parse_args()
     remote_path = CommonConfig.remote_path
     os.makedirs(remote_path, exist_ok=True)
     torch.set_num_threads(1)
-    mpp = MulProPPO(logger, args.task_name, args.load, args.start_episode)
+    mpp = MulProPPO(logger, args.task_name, args.load, args.start_episode, args.stage)
     mpp.train()
