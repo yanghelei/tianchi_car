@@ -228,6 +228,8 @@ class Processor:
             theta=curr_yaw
         )
 
+        _, y = car_polygon.exterior.xy
+
         lane_list = []
         if observation["map"] is not None:
             speed_limit = 0.0
@@ -324,13 +326,13 @@ class Processor:
             acc_prime_mask = self.action_library[:, 1] > 0  # 速度太慢，屏蔽继续减速的动作
         else:
             acc_prime_mask = np.ones((len(self.action_library),), dtype=np.bool_)
-        # if curr_steer < -pi / 36:  # 前轮左转大于5°，屏蔽继续左转的动作
-        #     steer_prime_mask = self.action_library[:, 0] > 0
-        # elif curr_steer > pi / 36:  # 前轮右转大于5°，屏蔽继续右转的动作
-        #     steer_prime_mask = self.action_library[:, 0] < 0
-        # else:
-        #     steer_prime_mask = np.ones((len(self.action_library),), dtype=np.bool_)
-        steer_prime_mask = np.ones((len(self.action_library),), dtype=np.bool_)
+
+        if min(y) < 1:  # 车辆压左线
+            steer_prime_mask = self.action_library[:, 0] < 0
+        elif max(y) > 1 + 3.75 * 3:  # 车辆压右线
+            steer_prime_mask = self.action_library[:, 0] > 0
+        else:
+            steer_prime_mask = np.ones((len(self.action_library),), dtype=np.bool_)
 
         mask = acc_prime_mask & steer_prime_mask
 
@@ -397,10 +399,21 @@ class Processor:
             over_speed_ratio = (car_speed - speed_limit) / speed_limit  # 超过规定限速的百分比
             speed_accept_ratio = max((0.2 - over_speed_ratio) / 0.2, 0)
 
-        if (curr_xy[1] - 2.11/2) < 1 or (curr_xy[1] + 2.11/2) > (1 + 3.75 * 3):
+        car_polygon = get_polygon(
+            center=curr_xy,
+            length=self.cfgs.car.length,
+            width=self.cfgs.car.width,
+            theta=car_status[2]
+        )
+
+        _, y = car_polygon.exterior.xy
+
+        if min(y) < 1 or max(y) > (1 + 3.75 * 3):  # 车辆压线
             keep_line_center_ratio = -1
         else:
             keep_line_center_ratio = max((0.5 - abs(current_offset)) / 0.5, 0)
+
+        npc_reward = self.get_npc_rewards(curr_xy, car_polygon, next_obs["npcs"])
 
         if fastly_brake or big_turn:
             rule_reward = -10
@@ -413,15 +426,6 @@ class Processor:
             end_reward = 1000
         else:
             end_reward = 0.0  # 尚未 terminate
-
-        car_polygon = get_polygon(
-            center=curr_xy,
-            length=self.cfgs.car.length,
-            width=self.cfgs.car.width,
-            theta=car_status[2]
-        )
-
-        npc_reward = self.get_npc_rewards(curr_xy, car_polygon, next_obs["npcs"])
 
         return end_reward + step_reward + rule_reward + npc_reward
 
