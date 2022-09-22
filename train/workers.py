@@ -108,7 +108,7 @@ class EnvWorker(mp.Process):
         self.env = make_env(self.worker_index)
         env_pid = -1
         while True:
-            command, policy = self.remote.recv()
+            command, policy, balance = self.remote.recv()
             if command == "sample":
                 while Get_Enough_Batch.value == 0:
                     try:
@@ -139,7 +139,7 @@ class EnvWorker(mp.Process):
                             if not done:
                                 new_env_state = self.env_post_processer.assemble_surr_vec_obs(obs)
                                 new_vec_state = self.env_post_processer.assemble_ego_vec_obs(obs)
-                            reward = self.env_post_processer.assemble_reward(obs, info)
+                            reward = self.env_post_processer.assemble_reward(obs, info, balance)
                             mask = 0 if done else 1
                             episode.push(
                                 env_state, vec_state, value, action, gaussian_action, logproba, mask, reward, info,
@@ -232,12 +232,12 @@ class MemorySampler(object):
         for remote in self.work_remotes:
             remote.close()
 
-    def sample(self, policy):
+    def sample(self, policy, balance):
         policy.to("cpu")
         memory = Memory()
         Get_Enough_Batch.value = 0
         for remote in self.remotes:
-            remote.send(("sample", policy))
+            remote.send(("sample", policy, balance))
 
         while len(memory) < self.batch_size:
             episode = self.queue.get(True)
@@ -251,12 +251,12 @@ class MemorySampler(object):
         policy.to(self.device)
         return memory
 
-    def eval(self, policy, eval_episode):
+    def eval(self, policy, eval_episode, balance=0):
         policy.to('cpu')
         memory =  Memory()
         Get_Enough_Batch.value = 0
         for remote in self.remotes:
-            remote.send(("eval", policy))
+            remote.send(("eval", policy, balance))
             
         while memory.num_episode < eval_episode:
             episode = self.queue.get(True)
@@ -273,6 +273,6 @@ class MemorySampler(object):
     def close(self):
         Get_Enough_Batch.value = 1
         for remote in self.remotes:
-            remote.send(("close", None))
+            remote.send(("close", None, None))
         for worker in self.workers:
             worker.join()

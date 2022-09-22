@@ -174,7 +174,7 @@ class EnvPostProcsser:
         
         return ego_state
 
-    def assemble_reward(self, observation: Dict, info: Dict) -> float:
+    def assemble_reward(self, observation: Dict, info: Dict, balance=None) -> float:
         try:
             target_xy = (
                 (observation["player"]["target"][0] + observation["player"]["target"][4]) / 2,
@@ -305,6 +305,9 @@ class EnvPostProcsser:
         rule_reward_balance = 0
         if self.stage == 2:
             rule_reward_balance = 1
+        # test 
+        if balance is not None:
+            rule_reward_balance = balance
         total_reward = base_reward + collide_reward_balance*collide_reward + rule_reward_balance*rule_reward 
 
         return total_reward

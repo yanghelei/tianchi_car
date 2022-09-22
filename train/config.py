@@ -22,7 +22,7 @@ class PolicyParam():
     action_repeat: int = 1 
 
     if debug:
-        use_eval = False
+        use_eval = True 
         num_workers = 1
         random_episode = 0
         num_episode = 20
@@ -30,6 +30,9 @@ class PolicyParam():
         minibatch_size = 600
         num_epoch = 3
         save_num_episode = 1
+        eval_episode: int = 1
+        eval_interval: int = 1
+        log_num_episode: int = 1
     else:
         use_eval = True
         num_workers: int = 15
@@ -39,6 +42,9 @@ class PolicyParam():
         minibatch_size: int = 1024
         num_epoch: int = 3
         save_num_episode = 100
+        eval_episode: int = 200
+        eval_interval: int = 100
+        log_num_episode: int = 10
 
     # trick use    
     use_target_kl: bool = False
@@ -48,10 +54,6 @@ class PolicyParam():
     use_clip_grad: bool = True
     share: bool = True
     independent_std: bool = True
-
-    log_num_episode: int = 10
-    eval_interval: int = 100
-    eval_episode: int = 200 
 
     # params
     gamma: float = 0.99
@@ -78,6 +80,13 @@ class PolicyParam():
         "final": 0.1,
         "power": 1.0,
         "max_decay_steps": 10000
+        }
+    # testing yet
+    balance_schedule={
+        "initial": 0,
+        "final": 0.5,
+        "power": 1.0,
+        "max_decay_steps": 5000
         }
     EPS: float = 1e-10
 

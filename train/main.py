@@ -18,7 +18,7 @@ from train.workers import MemorySampler
 from geek.env.logger import Logger
 from ai_hub.notice import notice
 from ai_hub import Logger as Writer
-from utils.util import polynomial_decay
+from utils.util import polynomial_decay, polynomial_increase
 import re
  
 logger = Logger.get_logger(__name__)
@@ -37,9 +37,11 @@ class MulProPPO:
         self.lr_schedule = PolicyParam.learning_rate_schedule
         self.beta_schedule = PolicyParam.beta_schedule
         self.cr_schedule = PolicyParam.clip_range_schedule
+        self.balance_schedule = PolicyParam.balance_schedule
         self.clip = self.cr_schedule['initial']
         self.beta = self.beta_schedule['initial']
         self.lr = self.lr_schedule['initial']
+        self.balance = self.balance_schedule['initial']
         self.loss_value_coeff = self.args.loss_coeff_value
         self._make_dir()
         torch.manual_seed(self.args.seed)
@@ -62,6 +64,7 @@ class MulProPPO:
         self.num_episode = self.start_episode + self.args.num_episode
         self.random_episode = self.start_episode + self.args.random_episode
         self.start_time = time.time()
+        
 
     def _make_dir(self):
         current_dir = os.path.abspath(".")
@@ -283,10 +286,12 @@ class MulProPPO:
             + "*"
             + str(round(loss_entropy,3))
         )
+        self.logger.info('Gaussian Policy:' + str(self.args.gaussian))
         self.logger.info("Step: " + str(mean_step))
         self.logger.info("total data number: " + str(self.global_sample_size))
         self.logger.info(
             "lr: " + str(round(self.lr, 5)) + ' clip: '+ str(round(self.clip, 5)) + ' entropy: '+str(round(self.beta, 5)))
+        self.logger.info('balance:' + str(round(self.balance, 5)))
         self.writer.scalar_summary("reward", mean_reward, episode)
         self.writer.scalar_summary("reach_goal_rate", reach_goal_rate, episode)
         self.writer.scalar_summary('pi_loss', loss_surr, episode)
@@ -301,14 +306,16 @@ class MulProPPO:
 
         for i_episode in range(self.start_episode, self.num_episode):
 
-            memory = self.sampler.sample(self.model)
+            memory = self.sampler.sample(self.model, self.balance)
             batch = memory.sample()
             batch_size = len(memory)
+            # schedule hyper_params
             self.global_sample_size += batch_size
-            # update policy
             self.lr = polynomial_decay(self.lr_schedule["initial"], self.lr_schedule["final"], self.lr_schedule["max_decay_steps"], self.lr_schedule["power"], i_episode)
             self.beta = polynomial_decay(self.beta_schedule["initial"], self.beta_schedule["final"], self.beta_schedule["max_decay_steps"], self.beta_schedule["power"], i_episode)
             self.clip = polynomial_decay(self.cr_schedule["initial"], self.cr_schedule["final"], self.cr_schedule["max_decay_steps"], self.cr_schedule["power"], i_episode)
+            self.balance = polynomial_increase(self.balance_schedule["initial"], self.balance_schedule["final"], self.balance_schedule["max_decay_steps"], self.balance_schedule["power"], i_episode)
+            # update policy
             info = self.update(batch, i_episode, batch_size)
             # log 
             if i_episode % self.args.log_num_episode == 0 or i_episode == (self.num_episode-1):
