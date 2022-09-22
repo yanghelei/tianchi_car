@@ -146,6 +146,7 @@ class EnvPostProcsser:
 
         vec_obs = numpy.array(
             [
+                np.sqrt(delta_xy[0]**2+delta_xy[1]**2),
                 delta_xy[0],  # 目标区域与当前位置的偏差x
                 delta_xy[1],  # 目标区域与当前位置的偏差y
                 curr_yaw,  # 当前车辆的朝向角

@@ -115,8 +115,8 @@ class PPOPolicy(nn.Module):
                     [
                         ("actor_1", orthogonal_init_(nn.Linear(384, 256))),
                         ("actor_relu_1", nn.ReLU()),
-                        ("actor_2", orthogonal_init_(nn.Linear(256, 256))),
-                        ("actor_relu_2", nn.ReLU()),
+                        # ("actor_2", orthogonal_init_(nn.Linear(256, 256))),
+                        # ("actor_relu_2", nn.ReLU()),
                         ("actor_mu", orthogonal_init_(nn.Linear(256, num_outputs), gain=0.01)),
                     ]
                 )
@@ -129,8 +129,8 @@ class PPOPolicy(nn.Module):
                     [
                         ("actor_1", orthogonal_init_(nn.Linear(384, 256))),
                         ("actor_relu_1", nn.ReLU()),
-                        ("actor_2", orthogonal_init_(nn.Linear(256, 256))),
-                        ("actor_relu_2", nn.ReLU()),
+                        # ("actor_2", orthogonal_init_(nn.Linear(256, 256))),
+                        # ("actor_relu_2", nn.ReLU()),
                         ("actor_mu", orthogonal_init_(nn.Linear(256, num_outputs*2), gain=0.01)),
                     ]
                 )

@@ -5,9 +5,6 @@
 
 import os
 import time
-import shutil
-from pathlib import Path
-from cv2 import mean
 import numpy as np
 import torch
 import torch.nn as nn
@@ -21,62 +18,50 @@ from train.workers import MemorySampler
 from geek.env.logger import Logger
 from ai_hub.notice import notice
 from ai_hub import Logger as Writer
+from utils.util import polynomial_decay
+import re
+ 
 logger = Logger.get_logger(__name__)
 
 class MulProPPO:
-    def __init__(self, logger, task_name, load, start_episode, stage):
+    def __init__(self, logger, task_name, load, stage, start_episode=0):
         self.args = PolicyParam
         self.logger = logger
         self.global_sample_size = 0
         self.task_name = task_name
         self.load = load
-        self.start_episode = start_episode
         self.stage = stage
+        self.best_reach_rate = -np.inf
+        self.start_episode = 0
+        # schedule
+        self.lr_schedule = PolicyParam.learning_rate_schedule
+        self.beta_schedule = PolicyParam.beta_schedule
+        self.cr_schedule = PolicyParam.clip_range_schedule
+        self.clip = self.cr_schedule['initial']
+        self.beta = self.beta_schedule['initial']
+        self.lr = self.lr_schedule['initial']
+        self.loss_value_coeff = self.args.loss_coeff_value
         self._make_dir()
-
         torch.manual_seed(self.args.seed)
         np.random.seed(self.args.seed)
         if self.args.device == "cuda":
             torch.cuda.manual_seed(self.args.seed)
-
         self.sampler = MemorySampler(self.args, self.logger, stage)
         if self.args.gaussian:
             self.model = PPOPolicy(2).to(self.args.device)
         else:
             self.model = CategoricalPPOPolicy(CommonConfig.action_num).to(self.args.device)
+        self.optimizer = opt.Adam(self.model.parameters(), lr=self.lr)
         if load:
-            self._load_model(self.args.model_path+f'/network_{start_episode}.pth')
-            self.logger.info('Successfully load pre-trained model ')
-        self.optimizer = opt.Adam(self.model.parameters(), lr=self.args.lr)
+            if self.start_episode == 0:
+                self.load_checkpoint()
+            else:
+                self.load_checkpoint(self.args.model_path+f'/checkpoint_{start_episode}.pth')
         if self.args.use_value_norm:
             self.value_norm = Normalization(1, device = self.args.device)
-
-        self.clip_now = self.args.clip
+        self.num_episode = self.start_episode + self.args.num_episode
+        self.random_episode = self.start_episode + self.args.random_episode
         self.start_time = time.time()
-
-    def _load_model(self, model_path: str = None):
-        if not model_path:
-            return
-        self.model.load_state_dict(torch.load(model_path, map_location=self.args.device))
-
-    def _check_keys(self, model, pretrained_state_dict):
-        ckpt_keys = set(pretrained_state_dict.keys())
-        model_keys = set(model.state_dict().keys())
-        used_pretrained_keys = model_keys & ckpt_keys
-        unused_pretrained_keys = ckpt_keys - model_keys
-        missing_keys = model_keys - ckpt_keys
-        # filter 'num_batches_tracked'
-        missing_keys = [x for x in missing_keys if not x.endswith("num_batches_tracked")]
-        if len(missing_keys) > 0:
-            logger.info("[Warning] missing keys: {}".format(missing_keys))
-            logger.info("missing keys:{}".format(len(missing_keys)))
-        if len(unused_pretrained_keys) > 0:
-            logger.info("[Warning] unused_pretrained_keys: {}".format(unused_pretrained_keys))
-            logger.info("unused checkpoint keys:{}".format(len(unused_pretrained_keys)))
-        logger.info("used keys:{}".format(len(used_pretrained_keys)))
-
-        assert len(used_pretrained_keys) > 0, "check_key load NONE from pretrained checkpoint"
-        return True
 
     def _make_dir(self):
         current_dir = os.path.abspath(".")
@@ -89,6 +74,40 @@ class MulProPPO:
             print("file is existed")
         
         self.writer = Writer(self.exp_dir, openid='oWbT458Ya1xKsC1d_E_RXWf0MNos')
+
+    def _read_history_models(self):
+        all_index = []
+        number = re.compile(r'\d+')
+        files = os.listdir(self.args.model_path)
+        for file in files:
+            index = number.findall(file)
+            if len(index) > 0:
+                all_index.append(int(index[0]))
+        all_index.sort() # from low to high sorting
+        return all_index 
+
+    def load_checkpoint(self, path=None):
+
+        if path is None:
+            index = self._read_history_models()
+            latest_index = index[-1]
+            path = self.args.model_path+f'/checkpoint_{latest_index}.pth'
+        checkpoint = torch.load(path)
+        self.start_episode = checkpoint['episode']
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.best_reach_rate = checkpoint['best_reach_rate']
+        self.logger.info(f'Successfully load pre-trained model : {path}')
+    
+    def save_checkpoint(self, path, episode, best_reach_rate):
+
+        checkpoint = {'episode': episode, 
+                      'best_reach_rate': best_reach_rate,
+                      'model_state_dict': self.model.state_dict(),
+                      'optimizer_state_dict': self.optimizer.state_dict(),
+                      }
+        torch.save(checkpoint, path)
+        self.logger.info(f'model has been successfully saved : {path}')
 
     def cal_value_loss(self, env_state, old_values, returns):
 
@@ -123,7 +142,7 @@ class MulProPPO:
         approx_kl = torch.mean((torch.exp(log_ratio) - 1) - log_ratio).item() # aprroximate the kl
         assert ratio.shape == advantages.shape
         surr1 = ratio * advantages
-        surr2 = ratio.clamp(1 - self.clip_now, 1 + self.clip_now) * advantages
+        surr2 = ratio.clamp(1 - self.clip, 1 + self.clip) * advantages
         loss_surr = -torch.mean(torch.min(surr1, surr2))
 
         return loss_surr, loss_entropy, approx_kl
@@ -133,7 +152,7 @@ class MulProPPO:
         rewards = torch.from_numpy(np.array(batch.reward))
         values = torch.from_numpy(np.array(batch.value))
         masks = torch.from_numpy(np.array(batch.mask))
-        actions = torch.from_numpy(np.array(batch.action)) # 这一句可能会报错 
+        actions = torch.from_numpy(np.array(batch.action))
         gaussian_actions = torch.from_numpy(np.array(batch.gaussian_action))
         sur_obs = torch.from_numpy(np.array(batch.sur_obs))
         vec_obs = torch.from_numpy(np.array(batch.vec_obs))
@@ -213,19 +232,22 @@ class MulProPPO:
 
                 total_loss = (
                     loss_surr
-                    + self.args.loss_coeff_value * loss_value
-                    + self.args.loss_coeff_entropy * loss_entropy
+                    + self.loss_value_coeff * loss_value
+                    + self.beta * loss_entropy
                 )
 
                 if self.args.use_target_kl:
                     if approx_kl > 1.5*self.args.target_kl:
                         self.logger.info(f'Episode:{episode} Early stopping at epoch {i_epoch} due to reaching max kl.')
+                # update lr 
+                for pg in self.optimizer.param_groups:
+                    pg["lr"] = self.lr
                 self.optimizer.zero_grad()
                 total_loss.backward()
                 if self.args.use_clip_grad:
                     nn.utils.clip_grad_norm_(self.model.parameters(), self.args.max_grad_norm)
                 # before training , rollout out some random episode to initiate
-                if episode >= (self.start_episode + self.args.random_episode):
+                if episode >= self.random_episode:
                     self.optimizer.step()
 
         # update normalization 
@@ -234,60 +256,12 @@ class MulProPPO:
                     loss_entropy=loss_entropy.item(), loss_value=loss_value.item())
         return info
 
-    def schedule(self, i_episode):
-        # clip linearly decreanse
-        if self.args.schedule_clip == "linear":
-            ep_ratio = 1 - ((i_episode) / self.args.num_episode)
-            self.clip_now = self.args.clip * ep_ratio
-        
-        if self.args.schedule_clip == "fix":
-            ep_ratio = 1 
-            self.clip_now = self.args.clip * ep_ratio
-
-        # lr linearly decrease
-        if self.args.schedule_adam == "linear":
-            ep_ratio = 1 - ((i_episode) / self.args.num_episode)
-            lr_now = self.args.lr * ep_ratio
-            for g in self.optimizer.param_groups:
-                g["lr"] = lr_now
-            iteration_reduce = self.args.lr * (1 - ep_ratio) # reduce 
-        # 分段式调整 
-        if self.args.schedule_adam == "layer":
-            for item in self.args.lr_schedule:
-                if self.global_sample_size >= item[0]:
-                    lr_now = item[1]
-            for g in self.optimizer.param_groups:
-                g["lr"] = lr_now
-            iteration_reduce = 0.0
-        # 分段式+线性衰减
-        if self.args.schedule_adam == "layer_linear":
-            for idx, item in enumerate(self.args.lr_schedule):
-                if self.global_sample_size >= item[0]:
-                    lr_max = item[1]
-                    data_num_min = item[0]
-                    lr_min = self.args.lr_schedule[idx + 1][1]
-                    data_num_max = self.args.lr_schedule[idx + 1][0]
-            num_iteration = int((data_num_max - data_num_min) / self.args.batch_size)
-            iteration_reduce = float((lr_max - lr_min) / num_iteration)
-            self.args.lr = self.args.lr - iteration_reduce
-            lr_now = self.args.lr
-            for g in self.optimizer.param_groups:
-                g["lr"] = lr_now
-
-        if self.args.schedule_adam == "fix":
-            lr_now = self.args.lr
-            iteration_reduce = 0.0
-
-        return lr_now, iteration_reduce
-
     def log(self, memory, rewards, info, episode):
         
         total_loss = info['total_loss']
         loss_surr = info['loss_surr']
         loss_value = info['loss_value']
         loss_entropy = info['loss_entropy']
-        lr_now = info['lr_now']
-        lr_iteration_reduce = info['lr_iteration_reduce']
         mean_reward = (np.sum(rewards) / memory.num_episode)
         mean_step = len(memory) // memory.num_episode
         reach_goal_rate = memory.arrive_goal_num / memory.num_episode
@@ -301,19 +275,18 @@ class MulProPPO:
             + " = "
             + str(round(loss_surr,3))
             + "+"
-            + str(self.args.loss_coeff_value)
+            + str(self.loss_value_coeff)
             + "*"
             + str(round(loss_value,3))
             + "+"
-            + str(self.args.loss_coeff_entropy)
+            + str(round(self.beta, 5))
             + "*"
             + str(round(loss_entropy,3))
         )
         self.logger.info("Step: " + str(mean_step))
         self.logger.info("total data number: " + str(self.global_sample_size))
         self.logger.info(
-            "lr now: " + str(lr_now) + "  lr reduce per iteration: " + str(lr_iteration_reduce)
-        )
+            "lr: " + str(round(self.lr, 5)) + ' clip: '+ str(round(self.clip, 5)) + ' entropy: '+str(round(self.beta, 5)))
         self.writer.scalar_summary("reward", mean_reward, episode)
         self.writer.scalar_summary("reach_goal_rate", reach_goal_rate, episode)
         self.writer.scalar_summary('pi_loss', loss_surr, episode)
@@ -325,47 +298,42 @@ class MulProPPO:
     def train(self):
         nc = notice("oWbT458Ya1xKsC1d_E_RXWf0MNos")
         nc.task_complete_notice(task_name="Training", task_progree=f"training Started {self.task_name}.")
-        best_reward = -np.inf
 
-        for i_episode in range(self.start_episode, self.start_episode+self.args.num_episode):
+        for i_episode in range(self.start_episode, self.num_episode):
 
             memory = self.sampler.sample(self.model)
             batch = memory.sample()
             batch_size = len(memory)
             self.global_sample_size += batch_size
             # update policy
+            self.lr = polynomial_decay(self.lr_schedule["initial"], self.lr_schedule["final"], self.lr_schedule["max_decay_steps"], self.lr_schedule["power"], i_episode)
+            self.beta = polynomial_decay(self.beta_schedule["initial"], self.beta_schedule["final"], self.beta_schedule["max_decay_steps"], self.beta_schedule["power"], i_episode)
+            self.clip = polynomial_decay(self.cr_schedule["initial"], self.cr_schedule["final"], self.cr_schedule["max_decay_steps"], self.cr_schedule["power"], i_episode)
             info = self.update(batch, i_episode, batch_size)
-            # schedule lr and clip
-            lr_now, lr_iteration_reduce = self.schedule(i_episode)
-            info['lr_now'] = lr_now
-            info['lr_iteration_reduce'] = lr_iteration_reduce
             # log 
-            if i_episode % self.args.log_num_episode == 0 or i_episode == (self.args.num_episode-1):
+            if i_episode % self.args.log_num_episode == 0 or i_episode == (self.num_episode-1):
                 self.logger.info(
                 "----------------------" + str(i_episode) + "-------------------------"
                                 ) 
                 self.log(memory, batch.reward, info, i_episode)
                 
-            if (i_episode % self.args.eval_interval == 0 \
-                or i_episode == (self.args.num_episode+self.start_episode-1)) \
-                and self.args.use_eval:
+            if (i_episode % self.args.eval_interval == 0 or i_episode == (self.num_episode-1)) and self.args.use_eval:
                 memory = self.sampler.eval(self.model, self.args.eval_episode)
                 batch = memory.sample()
                 mean_reward = np.sum(batch.reward) / memory.num_episode
                 mean_step = len(memory) // memory.num_episode
-                if best_reward < mean_reward:
-                    best_reward = mean_reward
-                    torch.save(
-                    self.model.state_dict(), remote_path + "/best_network.pth"
-                            )
+                reach_goal_rate = memory.arrive_goal_num / memory.num_episode
+                if self.best_reach_rate < reach_goal_rate:
+                    self.best_reach_rate = reach_goal_rate
+                    path = remote_path + "/best_checkpoint.pth"
+                    self.save_checkpoint(path, i_episode, self.best_reach_rate)
                 self.logger.info(
                 "--------------------" + 'Eval ' + str(i_episode) + "---------------------"
                                 )
-                reach_goal_rate = memory.arrive_goal_num / memory.num_episode
                 self.logger.info("Mean Step: " + str(mean_step))
                 self.logger.info("Success Rate: " + str(reach_goal_rate))
                 self.logger.info('Mean Reward:' + str(mean_reward))
-                self.logger.info('Best Reward:' + str(best_reward))
+                self.logger.info('Best Reach_Rate:' + str(self.best_reach_rate))
                 self.writer.scalar_summary('Eval Successs Rate', reach_goal_rate, i_episode)
                 self.writer.scalar_summary('Eval Mean Reward', mean_reward, i_episode)
                 self.writer.scalar_summary('Eval Mean Step', mean_step, i_episode)
@@ -382,17 +350,9 @@ class MulProPPO:
                 self.writer.show('entropy_loss')
                 self.writer.show('mean_step')
 
-            if i_episode % self.args.save_num_episode == 0 \
-                and i_episode > (self.start_episode+self.args.random_episode) \
-                or i_episode == (self.args.num_episode+self.start_episode-1):
-                torch.save(
-                    self.model.state_dict(), self.model_dir + f"network_{i_episode}.pth"
-                )
-                # 存储到云端
-                torch.save(
-                    self.model.state_dict(), remote_path + f"/network_{i_episode}.pth"
-                )
-                self.logger.info(f'model has been successfully saved : {remote_path} + "/network_{i_episode}')
+            if i_episode % self.args.save_num_episode == 0 and i_episode > (self.random_episode) or i_episode == (self.num_episode-1):
+                save_path = remote_path + f"/checkpoint_{i_episode}.pth"
+                self.save_checkpoint(save_path, i_episode, self.best_reach_rate)
 
         self.sampler.close()
 
@@ -407,5 +367,5 @@ if __name__ == "__main__":
     remote_path = CommonConfig.remote_path
     os.makedirs(remote_path, exist_ok=True)
     torch.set_num_threads(1)
-    mpp = MulProPPO(logger, args.task_name, args.load, args.start_episode, args.stage)
+    mpp = MulProPPO(logger, args.task_name, args.load, args.stage, args.start_episode)
     mpp.train()
