@@ -40,9 +40,9 @@ config = dict(
 
     min_episode_per_collect=15 * 3,
 
-    update_per_step=1,
+    update_per_step=0.25,
 
-    batch_size=256,  # the batch size of sample data, which is going to feed in the policy network
+    batch_size=1024,  # the batch size of sample data, which is going to feed in the policy network
     # hidden_sizes=[128, 128],
 
     training_num=15,  # 用于训练的环境数目
