@@ -32,7 +32,7 @@ class MulProPPO:
         self.load = load
         self.stage = stage
         self.best_reach_rate = -np.inf
-        self.start_episode = 0
+        self.start_episode = start_episode
         # schedule
         self.lr_schedule = PolicyParam.learning_rate_schedule
         self.beta_schedule = PolicyParam.beta_schedule
@@ -54,13 +54,13 @@ class MulProPPO:
         else:
             self.model = CategoricalPPOPolicy(CommonConfig.action_num).to(self.args.device)
         self.optimizer = opt.Adam(self.model.parameters(), lr=self.lr)
+        if self.args.use_value_norm:
+            self.value_norm = Normalization(1, device = self.args.device)
         if load:
             if self.start_episode == 0:
                 self.load_checkpoint()
             else:
                 self.load_checkpoint(self.args.model_path+f'/checkpoint_{start_episode}.pth')
-        if self.args.use_value_norm:
-            self.value_norm = Normalization(1, device = self.args.device)
         self.num_episode = self.start_episode + self.args.num_episode
         self.random_episode = self.start_episode + self.args.random_episode
         self.start_time = time.time()
@@ -89,6 +89,12 @@ class MulProPPO:
         all_index.sort() # from low to high sorting
         return all_index 
 
+    def load_model(self):
+        path = self.args.model_path+f'/network_{self.start_episode}.pth'
+        checkpoint = torch.load(path)
+        self.model.load_state_dict(checkpoint)
+        self.logger.info(f'Successfully load pre-trained model : {path}')
+
     def load_checkpoint(self, path=None):
 
         if path is None:
@@ -99,6 +105,7 @@ class MulProPPO:
         self.start_episode = checkpoint['episode']
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.value_norm.load_state_dict(checkpoint['value_norm'])
         self.best_reach_rate = checkpoint['best_reach_rate']
         self.logger.info(f'Successfully load pre-trained model : {path}')
     
@@ -108,6 +115,7 @@ class MulProPPO:
                       'best_reach_rate': best_reach_rate,
                       'model_state_dict': self.model.state_dict(),
                       'optimizer_state_dict': self.optimizer.state_dict(),
+                      'value_norm': self.value_norm.state_dict()
                       }
         torch.save(checkpoint, path)
         self.logger.info(f'model has been successfully saved : {path}')

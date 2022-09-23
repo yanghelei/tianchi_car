@@ -25,6 +25,8 @@ class Normalization(nn.Module):
         
         self.reset_parameters()
 
+        self.to(self.device)
+
     def reset_parameters(self):
         self.running_mean.zero_()
         self.running_mean_sq.zero_()

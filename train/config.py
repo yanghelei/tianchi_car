@@ -16,7 +16,7 @@ import numpy as np
 class PolicyParam():
     seed: int = 1234
 
-    debug = True
+    debug = False
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
     gaussian = False # 动作是否连续
     action_repeat: int = 1 
@@ -91,8 +91,10 @@ class PolicyParam():
     EPS: float = 1e-10
 
     reload = False
-
-    model_path: str = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'categorical_ppo_v3')
+    if gaussian:
+        model_path: str = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'gaussian_ppo_v1')
+    else:
+        model_path: str = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'categorical_ppo_v4')
     obs_type: str = "vec"
     img_width: int = 224
     img_length: int = 224
@@ -107,6 +109,9 @@ class PolicyParam():
 
 class CommonConfig:
 
-    remote_path = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'categorical_ppo_v3')
+    if PolicyParam.gaussian:
+        remote_path: str = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'gaussian_ppo_v1')
+    else:
+        remote_path = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'categorical_ppo_v4')
     env_action_space = Box(low=np.array([-0.13, -0.7]), high=np.array([0.13, 0.7]), dtype=np.float32)
     action_num = 121
