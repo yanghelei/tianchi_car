@@ -408,7 +408,7 @@ class Processor:
 
         _, y = car_polygon.exterior.xy
 
-        if min(y) < 1 or max(y) > (1 + 3.75 * 3):  # 车辆压线
+        if min(y) < (1 + 0.5) or max(y) > (1 + 3.75 * 3 - 0.5):  # 车辆压线
             keep_line_center_ratio = -1
         else:
             keep_line_center_ratio = max((0.5 - abs(current_offset)) / 0.5, 0)
