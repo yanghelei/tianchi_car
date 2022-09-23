@@ -40,7 +40,7 @@ config = dict(
 
     min_episode_per_collect=15 * 3,
 
-    update_per_step=0.25,
+    update_per_step=1,
 
     batch_size=1024,  # the batch size of sample data, which is going to feed in the policy network
     # hidden_sizes=[128, 128],
