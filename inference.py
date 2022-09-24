@@ -14,14 +14,16 @@ import numpy as np
 import argparse 
 import torch
 from train.config import CommonConfig, PolicyParam
-
+import re
+import os 
 logger = Logger.get_logger(__name__)
 torch.set_num_threads(1)
 model_dir = CommonConfig.remote_path
 parser = argparse.ArgumentParser()
 parser.add_argument('--load_model', action="store_true", default=False)
-parser.add_argument('--episode', type=int, default=0)
+parser.add_argument('--start_episode', type=int, default=0)
 parser.add_argument('--num_workers', type=int, default=1)
+parser.add_argument('--best', action='store_true', default=False)
 args = parser.parse_args()
 high_action = CommonConfig.env_action_space.high
 low_action = CommonConfig.env_action_space.low
@@ -29,6 +31,18 @@ action_num = CommonConfig.action_num
 action_repeat = PolicyParam.action_repeat
 
 actions_map = EnvWorker._set_actions_map(action_num)
+
+def read_history_models(model_path):
+    all_index = []
+    number = re.compile(r'\d+')
+    files = os.listdir(model_path)
+    for file in files:
+        index = number.findall(file)
+        if len(index) > 0:
+            all_index.append(int(index[0]))
+    all_index.sort() # from low to high sorting
+    return all_index 
+
 def action_transform(action, gaussian) -> np.array :
     if gaussian:
         high_action = CommonConfig.env_action_space.high
@@ -51,9 +65,18 @@ def run(worker_index):
             model = PPOPolicy(2)
         else:
             model = CategoricalPPOPolicy(action_num)
-        env_post_processer = EnvPostProcsser()
+        env_post_processer = EnvPostProcsser(stage=0)
         if args.load_model:
-            model.load_model(model_dir+f'/network_{args.episode}.pth', 'cpu')
+            if args.best:
+                ckpt = torch.load(model_dir+f'/best_checkpoint.pth', 'cpu')
+            else:
+                start_episode = args.start_episode
+                if args.start_episode == 0:
+                    index = read_history_models(model_dir)
+                    start_episode = index[-1]
+                ckpt =torch.load(model_dir+f'/checkpoint_{start_episode}.pth', 'cpu')
+            model_state_dict = ckpt['model_state_dict']
+            model.load_state_dict(model_state_dict)
             logger.info('model has been successfully loaded')
         vec_state, env_state = env_post_processer.reset(obs)
         while True:
