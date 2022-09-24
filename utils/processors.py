@@ -8,6 +8,17 @@ from utils.math import compute_distance, get_polygon
 from shapely.geometry import Polygon, LineString
 
 
+def get_current_line(y):
+    if (1 + 0 * 3.75) < y < (1 + 1 * 3.75):  # 车辆在第一车道
+        return 1
+    elif (1 + 1 * 3.75) < y < (1 + 2 * 3.75):  # 车辆在第二车道
+        return 2
+    elif (1 + 2 * 3.75) < y < (1 + 3 * 3.75):  # 车辆在第三车道
+        return 3
+    else:
+        return 0  # 容错处理
+
+
 class EvalProcessor:
     def __init__(self, cfgs):
         self.cfgs = cfgs
@@ -228,7 +239,7 @@ class Processor:
             theta=curr_yaw
         )
 
-        _, y = car_polygon.exterior.xy
+        car_x, car_y = car_polygon.exterior.xy
 
         lane_list = []
         if observation["map"] is not None:
@@ -260,6 +271,8 @@ class Processor:
             ]]
         )
 
+        steer_masks = [True, True]
+
         npc_info_dict = {}
         for npc_info in observation["npcs"]:
             if int(npc_info[0]) == 0:
@@ -278,6 +291,17 @@ class Processor:
 
             safe_distance = car_polygon.distance(npc_polygon)
 
+            npc_x, npc_y = npc_polygon.exterior.xy
+            block_x_range = (min(npc_x), max(npc_x))
+            block_y_range = (min(npc_y), max(npc_y))
+            if block_x_range[0] < min(car_x) < block_x_range[1] or block_x_range[0] < max(car_x) < block_x_range[1]:  # 如果 car 和 npc 并排前行
+                if max(car_y) < block_y_range[0]:  # car 在 npc 的左侧
+                    if safe_distance < 0.3:
+                        steer_masks[1] = False  # 右转屏蔽
+                elif min(car_y) > block_y_range[1]:  # car 在 npc 的右侧
+                    if safe_distance < 0.3:
+                        steer_masks[0] = False  # 左转屏蔽
+
             npc_info_dict[safe_distance] = [
                 safe_distance,
                 npc_info[2] - curr_xy[0],  # dx
@@ -288,6 +312,7 @@ class Processor:
                 npc_info[9],  # 障碍物宽度
                 npc_info[10],  # 障碍物长度
             ]
+
         if len(npc_info_dict) == 0:
             sur_obs_list = np.zeros((self.max_consider_nps, self.sur_dim))
             n_sur = 1
@@ -327,14 +352,21 @@ class Processor:
         else:
             acc_prime_mask = np.ones((len(self.action_library),), dtype=np.bool_)
 
-        if min(y) < 1:  # 车辆压左线
-            steer_prime_mask = self.action_library[:, 0] < 0
-        elif max(y) > 1 + 3.75 * 3:  # 车辆压右线
-            steer_prime_mask = self.action_library[:, 0] > 0
+        if min(car_y) < 1:  # 车辆压左线
+            steer_prime_mask = self.action_library[:, 0] <= 0
+        elif max(car_y) > 1 + 3.75 * 3:  # 车辆压右线
+            steer_prime_mask = self.action_library[:, 0] >= 0
         else:
             steer_prime_mask = np.ones((len(self.action_library),), dtype=np.bool_)
 
-        mask = acc_prime_mask & steer_prime_mask
+        if not steer_masks[0] and steer_masks[1]:  # 左侧有障碍物
+            lateral_steer_mask = self.action_library[:, 0] < 0
+        elif steer_masks[0] and not steer_masks[1]:  # 右侧有障碍物
+            lateral_steer_mask = self.action_library[:, 0] > 0
+        else:
+            lateral_steer_mask = np.ones((len(self.action_library),), dtype=np.bool_)
+
+        mask = acc_prime_mask & steer_prime_mask & lateral_steer_mask
 
         obs = dict(
             sur_obs=dict(
@@ -408,17 +440,19 @@ class Processor:
 
         _, y = car_polygon.exterior.xy
 
-        if min(y) < (1 + 0.5) or max(y) > (1 + 3.75 * 3 - 0.5):  # 车辆压线
-            keep_line_center_ratio = -1
+        if min(y) < (1 + 0.3) or max(y) > (1 + 3.75 * 3 - 0.3):  # 车辆压线
+            keep_line_ratio = -1
+        elif get_current_line(min(y)) == get_current_line(max(y)):  # 当前车辆的整体均处于相同车道
+            keep_line_ratio = 1
         else:
-            keep_line_center_ratio = max((0.5 - abs(current_offset)) / 0.5, 0)
+            keep_line_ratio = 0
 
-        npc_reward = self.get_npc_rewards(curr_xy, car_polygon, next_obs["npcs"])
+        npc_reward = self.get_npc_rewards(car_polygon, next_obs["npcs"])
 
         if fastly_brake or big_turn:
             rule_reward = -10
         else:
-            rule_reward = distance_close * (1 + keep_line_center_ratio) * speed_accept_ratio
+            rule_reward = distance_close * (1 + keep_line_ratio) * speed_accept_ratio
 
         if info["collided"]:  # 碰撞
             end_reward = -1000
@@ -429,14 +463,13 @@ class Processor:
 
         return end_reward + step_reward + rule_reward + npc_reward
 
-    def get_npc_rewards(self, car_center, car_polygon, npc_infos):
+    def get_npc_rewards(self, car_polygon, npc_infos):
+        car_x, car_y = car_polygon.exterior.xy
         reward = 0
         for npc_info in npc_infos:
             if int(npc_info[0]) == 0:
                 continue
             npc_center = (npc_info[2], npc_info[3])
-            if compute_distance(pos_0=car_center, pos_1=npc_center) > 20:
-                continue
             npc_width = npc_info[9]
             npc_length = npc_info[10]
             npc_theta = npc_info[4]
@@ -447,9 +480,19 @@ class Processor:
                 width=npc_width,
                 theta=npc_theta
             )
+            npc_x, npc_y = npc_polygon.exterior.xy
+            block = False
+            if max(npc_x) < min(car_x):  # 该 npc 在车的前方
+                block_range = (min(npc_y), max(npc_y))  # 该 npc 的车道占据范围
+                if (block_range[0] < min(car_y) < block_range[1]) or (block_range[0] < max(car_y) < block_range[1]):
+                    block = True
             safe_distance = car_polygon.distance(npc_polygon)
-            if safe_distance < self.cfgs.dangerous_distance:
-                reward -= 10
+
+            if block and safe_distance < 50:  # 保持50米安全距离
+                reward -= 1000 * (50 - safe_distance) / (50 + safe_distance)
+
+            # if safe_distance < self.cfgs.dangerous_distance:
+            #     reward -= 10
         return reward
 
     def preprocess_fn(self, **kwargs):
