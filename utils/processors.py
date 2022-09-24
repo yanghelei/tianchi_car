@@ -489,7 +489,7 @@ class Processor:
             safe_distance = car_polygon.distance(npc_polygon)
 
             if block and safe_distance < 50:  # 保持50米安全距离
-                reward -= 1000 * (50 - safe_distance) / (50 + safe_distance)
+                reward -= 100 * (50 - safe_distance) / (50 + safe_distance)
 
             # if safe_distance < self.cfgs.dangerous_distance:
             #     reward -= 10
