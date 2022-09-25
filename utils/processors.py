@@ -296,10 +296,10 @@ class Processor:
             block_y_range = (min(npc_y), max(npc_y))
             if block_x_range[0] < min(car_x) < block_x_range[1] or block_x_range[0] < max(car_x) < block_x_range[1]:  # 如果 car 和 npc 并排前行
                 if max(car_y) < block_y_range[0]:  # car 在 npc 的左侧
-                    if safe_distance < 0.3:
+                    if safe_distance < 0.3 and curr_yaw > 0:  # 小于安全距离并且车头仍朝右
                         steer_masks[1] = False  # 右转屏蔽
                 elif min(car_y) > block_y_range[1]:  # car 在 npc 的右侧
-                    if safe_distance < 0.3:
+                    if safe_distance < 0.3 and curr_yaw < 0:  # 小于安全距离并且车头仍朝左
                         steer_masks[0] = False  # 左转屏蔽
 
             npc_info_dict[safe_distance] = [
@@ -352,16 +352,16 @@ class Processor:
         else:
             acc_prime_mask = np.ones((len(self.action_library),), dtype=np.bool_)
 
-        if min(car_y) < 1:  # 车辆压左线
-            steer_prime_mask = self.action_library[:, 0] <= 0
-        elif max(car_y) > 1 + 3.75 * 3:  # 车辆压右线
-            steer_prime_mask = self.action_library[:, 0] >= 0
+        if min(car_y) < 1 and curr_yaw < 0:  # 车辆压左线，车头仍朝左
+            steer_prime_mask = self.action_library[:, 0] < 0
+        elif max(car_y) > 1 + 3.75 * 3 and curr_yaw > 0:  # 车辆压右线，车头仍朝右
+            steer_prime_mask = self.action_library[:, 0] > 0
         else:
             steer_prime_mask = np.ones((len(self.action_library),), dtype=np.bool_)
 
-        if not steer_masks[0] and steer_masks[1]:  # 左侧有障碍物
+        if not steer_masks[0] and steer_masks[1]:  # 左侧有障碍物，车头仍朝左
             lateral_steer_mask = self.action_library[:, 0] < 0
-        elif steer_masks[0] and not steer_masks[1]:  # 右侧有障碍物
+        elif steer_masks[0] and not steer_masks[1]:  # 右侧有障碍物，车头仍朝右
             lateral_steer_mask = self.action_library[:, 0] > 0
         else:
             lateral_steer_mask = np.ones((len(self.action_library),), dtype=np.bool_)
