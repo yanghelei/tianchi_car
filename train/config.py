@@ -38,8 +38,8 @@ class PolicyParam():
         num_workers: int = 15
         random_episode: int = 10
         num_episode: int = 1200
-        batch_size: int = 8392
-        minibatch_size: int = 1024
+        batch_size: int = 5120
+        minibatch_size: int = 512
         num_epoch: int = 3
         save_num_episode = 100
         eval_episode: int = 200
@@ -64,8 +64,8 @@ class PolicyParam():
     target_kl = 0.03 
     # schedule
     learning_rate_schedule={
-            "initial": 5e-5,
-            "final": 5e-6,
+            "initial": 1e-4,
+            "final": 1e-5,
             "power": 1.0,
             "max_decay_steps": 10000
             }
@@ -83,10 +83,10 @@ class PolicyParam():
         }
     # testing yet
     balance_schedule={
-        "initial": 0,
-        "final": 0.5,
+        "initial": 0.1,
+        "final": 1,
         "power": 1.0,
-        "max_decay_steps": 5000
+        "max_decay_steps": 10000
         }
     EPS: float = 1e-10
 
@@ -98,8 +98,8 @@ class PolicyParam():
     obs_type: str = "vec"
     img_width: int = 224
     img_length: int = 224
-    ego_vec_length: int = 12
-    surr_vec_length: int = 8
+    ego_vec_length: int = 11
+    surr_vec_length: int = 7
     surr_agent_number: int = 10
     history_length: int = 5
     state_norm: bool = False
