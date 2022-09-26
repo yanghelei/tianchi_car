@@ -62,10 +62,12 @@ class MulProPPO:
             else:
                 self.load_checkpoint(self.args.model_path+f'/checkpoint_{start_episode}.pth')
         self.num_episode = self.start_episode + self.args.num_episode
-        self.random_episode = self.start_episode + self.args.random_episode
+        if not self.load:
+            self.warmup_episode = self.start_episode + self.args.warmup_episode
+        else:
+            self.warmup_episode = self.start_episode
         self.start_time = time.time()
         
-
     def _make_dir(self):
         current_dir = os.path.abspath(".")
         self.exp_dir = current_dir + "/results/exp/"
@@ -258,7 +260,7 @@ class MulProPPO:
                 if self.args.use_clip_grad:
                     nn.utils.clip_grad_norm_(self.model.parameters(), self.args.max_grad_norm)
                 # before training , rollout out some random episode to initiate
-                if episode >= self.random_episode:
+                if episode >= self.warmup_episode:
                     self.optimizer.step()
 
         # update normalization 
@@ -365,7 +367,7 @@ class MulProPPO:
                 self.writer.show('entropy_loss')
                 self.writer.show('mean_step')
 
-            if i_episode % self.args.save_num_episode == 0 and i_episode > (self.random_episode) or i_episode == (self.num_episode-1):
+            if i_episode % self.args.save_num_episode == 0 and i_episode > (self.warmup_episode) or i_episode == (self.num_episode-1):
                 save_path = remote_path + f"/checkpoint_{i_episode}.pth"
                 self.save_checkpoint(save_path, i_episode, self.best_reach_rate)
 

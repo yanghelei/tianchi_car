@@ -36,7 +36,7 @@ class PolicyParam():
     else:
         use_eval = True
         num_workers: int = 15
-        random_episode: int = 10
+        warmup_episode: int = 10
         num_episode: int = 1200
         batch_size: int = 5120
         minibatch_size: int = 512
@@ -92,9 +92,9 @@ class PolicyParam():
 
     reload = False
     if gaussian:
-        model_path: str = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'gaussian_ppo_v1')
+        model_path: str = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'gaussian_ppo')
     else:
-        model_path: str = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'categorical_ppo_v4')
+        model_path: str = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'categorical_ppo')
     obs_type: str = "vec"
     img_width: int = 224
     img_length: int = 224
@@ -110,8 +110,8 @@ class PolicyParam():
 class CommonConfig:
 
     if PolicyParam.gaussian:
-        remote_path: str = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'gaussian_ppo_v1')
+        remote_path: str = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'gaussian_ppo')
     else:
-        remote_path = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'categorical_ppo_v4')
+        remote_path = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'categorical_ppo')
     env_action_space = Box(low=np.array([-0.13, -0.7]), high=np.array([0.13, 0.7]), dtype=np.float32)
     action_num = 121
