@@ -15,6 +15,11 @@ def wrap(angle):
     return angle
 
 
+def wrap_star(angle):
+    angle = pi - angle
+    return wrap(angle)
+
+
 def get_polygon(center, length, width, theta):
     x, y = center
     polygon_points = (
