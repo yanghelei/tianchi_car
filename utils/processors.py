@@ -292,16 +292,16 @@ class Processor:
             safe_distance = car_polygon.distance(npc_polygon)
 
             npc_x, npc_y = npc_polygon.exterior.xy
-            block_x_range = (min(npc_x), max(npc_x))
-            block_y_range = (min(npc_y), max(npc_y))
+            # block_x_range = (min(npc_x), max(npc_x))
+            # block_y_range = (min(npc_y), max(npc_y))
 
-            if block_x_range[0] < min(car_x) < block_x_range[1] or block_x_range[0] < max(car_x) < block_x_range[1]:  # 如果 car 和 npc 并排前行
-                if max(car_y) < block_y_range[0]:  # car 在 npc 的左侧
-                    if safe_distance < 0.3 and curr_yaw > 0:  # 小于安全距离并且车头仍朝右
-                        steer_masks[1] = False  # 右转屏蔽
-                elif min(car_y) > block_y_range[1]:  # car 在 npc 的右侧
-                    if safe_distance < 0.3 and curr_yaw < 0:  # 小于安全距离并且车头仍朝左
-                        steer_masks[0] = False  # 左转屏蔽
+            # if block_x_range[0] < min(car_x) < block_x_range[1] or block_x_range[0] < max(car_x) < block_x_range[1]:  # 如果 car 和 npc 并排前行
+            #     if max(car_y) < block_y_range[0]:  # car 在 npc 的左侧
+            #         if safe_distance < 0.3 and curr_yaw > 0:  # 小于安全距离并且车头仍朝右
+            #             steer_masks[1] = False  # 右转屏蔽
+            #     elif min(car_y) > block_y_range[1]:  # car 在 npc 的右侧
+            #         if safe_distance < 0.3 and curr_yaw < 0:  # 小于安全距离并且车头仍朝左
+            #             steer_masks[0] = False  # 左转屏蔽
 
             npc_dx = npc_x - np.array(curr_xy[0])
             npc_dy = npc_y - np.array(curr_xy[1])
@@ -359,10 +359,10 @@ class Processor:
         else:
             acc_prime_mask = np.ones((len(self.action_library),), dtype=np.bool_)
 
-        if min(car_y) < 1 and curr_yaw < 0:  # 车辆压左线，车头仍朝左
-            steer_prime_mask = self.action_library[:, 0] < 0
-        elif max(car_y) > 1 + 3.75 * 3 and curr_yaw > 0:  # 车辆压右线，车头仍朝右
-            steer_prime_mask = self.action_library[:, 0] > 0
+        if min(car_y) < 1:  # 车辆压左线
+            steer_prime_mask = self.action_library[:, 0] <= 0
+        elif max(car_y) > 1 + 3.75 * 3 > 0:  # 车辆压右线
+            steer_prime_mask = self.action_library[:, 0] >= 0
         else:
             steer_prime_mask = np.ones((len(self.action_library),), dtype=np.bool_)
 
