@@ -24,7 +24,7 @@ class PolicyParam():
     if debug:
         use_eval = True 
         num_workers = 1
-        random_episode = 0
+        warmup_episode = 0
         num_episode = 20
         batch_size = 600
         minibatch_size = 600

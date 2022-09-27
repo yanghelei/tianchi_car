@@ -63,9 +63,9 @@ class MulProPPO:
                 self.load_checkpoint(self.args.model_path+f'/checkpoint_{start_episode}.pth')
         self.num_episode = self.start_episode + self.args.num_episode
         if not self.load:
-            self.warmup_episode = self.start_episode + self.args.warmup_episode
-        else:
             self.warmup_episode = self.start_episode
+        else:
+            self.warmup_episode = self.start_episode + self.args.warmup_episode
         self.start_time = time.time()
         
     def _make_dir(self):
