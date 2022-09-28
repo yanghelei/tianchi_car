@@ -23,7 +23,7 @@ config = dict(
 
     buffer_size=1e6,
 
-    lr=5e-5,
+    lr=1e-4,
     gamma=0.99,
     num_atoms=51,
 

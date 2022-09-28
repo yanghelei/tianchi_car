@@ -145,7 +145,7 @@ class MyCollector(Collector):
                     run_time_error = False
                     self.train_logger.info(f'Reset Envs Successfully!')
                 else:
-                    time.sleep(5)  # sleep 5秒 再进行一次尝试
+                    time.sleep(1)  # sleep 1秒 再进行一次尝试
 
             # get the next action
             if random:
@@ -179,16 +179,17 @@ class MyCollector(Collector):
             result = self.env.step(action_remap, ready_env_ids)  # type: ignore
             obs_next, rew, done, info = result
 
-            if len(obs_next) != len(self.data.obs):
-                run_time_error = True
-                continue
-
             """ Batch 不支持 key 为 int 的字典，此处对 info 进行处理 """
             for _idx in range(len(info)):
                 agent_infos = dict()
                 info[_idx]['agent_infos'] = agent_infos
 
             self.data.update(obs_next=obs_next, rew=rew, done=done, info=info)
+
+            if len(self.data.obs_next) != len(ready_env_ids):
+                run_time_error = True
+                continue
+
             if self.preprocess_fn:
                 self.data.update(
                     self.preprocess_fn(
