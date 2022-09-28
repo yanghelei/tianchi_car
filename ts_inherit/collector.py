@@ -129,7 +129,7 @@ class MyCollector(Collector):
 
         self.data = Batch(obs={}, act={}, rew={}, done={}, obs_next={}, info={}, policy={})
         self.reset_env()  # 每次collect前先reset
-
+        last_state = self.data.policy.pop("hidden_state", None)
         run_time_error = False
 
         while True:
