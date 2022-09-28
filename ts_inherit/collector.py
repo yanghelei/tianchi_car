@@ -127,14 +127,25 @@ class MyCollector(Collector):
         episode_lens = []
         episode_start_indices = []
 
-        reach_goal = 0
-        time_out = 0
-        collision = 0
+        self.data = Batch(obs={}, act={}, rew={}, done={}, obs_next={}, info={}, policy={})
+        self.reset_env()  # 每次collect前先reset
+
+        run_time_error = False
 
         while True:
-            assert len(self.data) == len(ready_env_ids)
-            # restore the state: if the last state is None, it won't store
-            last_state = self.data.policy.pop("hidden_state", None)
+            retry_time = 0
+            while run_time_error:  # self.data数与ready_env_ids不符
+                self.train_logger.info(f'RetryTime_{retry_time}: DataEnvIds do not match ReadyEnvIds, Reset to keep training!')
+                self.data = Batch(obs={}, act={}, rew={}, done={}, obs_next={}, info={}, policy={})
+                self.reset_env()
+                # restore the state: if the last state is None, it won't store
+                last_state = self.data.policy.pop("hidden_state", None)
+                retry_time += 1
+                if len(self.data) == len(ready_env_ids):
+                    run_time_error = False
+                    self.train_logger.info(f'Reset Envs Successfully!')
+                else:
+                    time.sleep(5)  # sleep 5秒 再进行一次尝试
 
             # get the next action
             if random:
@@ -168,11 +179,13 @@ class MyCollector(Collector):
             result = self.env.step(action_remap, ready_env_ids)  # type: ignore
             obs_next, rew, done, info = result
 
+            if len(obs_next) != len(self.data.obs):
+                run_time_error = True
+                continue
+
             """ Batch 不支持 key 为 int 的字典，此处对 info 进行处理 """
             for _idx in range(len(info)):
                 agent_infos = dict()
-                # for key, value in info[_idx]['agent_infos'].items():
-                #     agent_infos[str(key)] = value
                 info[_idx]['agent_infos'] = agent_infos
 
             self.data.update(obs_next=obs_next, rew=rew, done=done, info=info)
@@ -193,25 +206,20 @@ class MyCollector(Collector):
                 if render > 0 and not np.isclose(render, 0):
                     time.sleep(render)
 
+            data_env_ids = self.data.info['env_id']
+
             # add data into the buffer
-            ptr, ep_rew, ep_len, ep_idx = self.buffer.add(self.data, buffer_ids=ready_env_ids)
+            ptr, ep_rew, ep_len, ep_idx = self.buffer.add(
+                self.data,
+                buffer_ids=data_env_ids
+            )
 
             # collect statistics
-            step_count += len(ready_env_ids)
+            step_count += len(data_env_ids)
 
             if np.any(done):
                 env_ind_local = np.where(done)[0]
-                if hasattr(self, 'test_logger'):
-                    for env_ind in env_ind_local:
-                        if info[env_ind]['reached_stoparea']:
-                            reach_goal += 1
-                        elif info[env_ind]['timeout']:
-                            time_out += 1
-                        elif info[env_ind]['collided']:
-                            collision += 1
-                        else:
-                            self.test_logger.info(f'Done without reasonable condition!')
-                env_ind_global = ready_env_ids[env_ind_local]
+                env_ind_global = data_env_ids[env_ind_local]
                 episode_count += len(env_ind_local)
                 episode_lens.append(ep_len[env_ind_local])
                 episode_rews.append(ep_rew[env_ind_local])
@@ -221,16 +229,6 @@ class MyCollector(Collector):
                 self._reset_env_with_ids(env_ind_local, env_ind_global, gym_reset_kwargs)
                 for i in env_ind_local:
                     self._reset_state(i)
-
-                # remove surplus env id from ready_env_ids
-                # to avoid bias in selecting environments
-                if n_episode:
-                    surplus_env_num = len(ready_env_ids) - (n_episode - episode_count)
-                    if surplus_env_num > 0:
-                        mask = np.ones_like(ready_env_ids, dtype=bool)
-                        mask[env_ind_local[:surplus_env_num]] = False
-                        ready_env_ids = ready_env_ids[mask]
-                        self.data = self.data[mask]
 
             self.data.obs = self.data.obs_next
 
@@ -242,10 +240,6 @@ class MyCollector(Collector):
         self.collect_episode += episode_count
         self.collect_time += max(time.time() - start_time, 1e-9)
 
-        if n_episode:
-            self.data = Batch(obs={}, act={}, rew={}, done={}, obs_next={}, info={}, policy={})
-            self.reset_env()
-
         if episode_count > 0:
             rews, lens, idxs = list(map(np.concatenate, [episode_rews, episode_lens, episode_start_indices]))
             rew_mean, rew_std = rews.mean(), rews.std()
@@ -256,8 +250,6 @@ class MyCollector(Collector):
 
         if hasattr(self, 'train_logger'):
             self.train_logger.info(f'Collector collected: {episode_count} episodes with {step_count} transitions\tCost:{round(max(time.time() - start_time, 1e-9), 2)}s')
-        if hasattr(self, 'test_logger'):
-            self.test_logger.info(f'Reach goal rate: {reach_goal}/{episode_count} \tCollision rate:{collision}/{episode_count} \tTimeout rate:{time_out}/{episode_count}')
 
         return {
             "n/ep": episode_count,

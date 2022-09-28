@@ -215,7 +215,7 @@ class Processor:
                 self.n_ego_n_deque[env_id].append(1)
                 self.n_ego_vec_deque[env_id].append(np.zeros((1, self.ego_dim)))
 
-    def get_observation(self, observation, env_id=None):
+    def get_observation(self, observation, env_id):
         curr_xy = (observation["player"]["status"][0], observation["player"]["status"][1])  # 当前车辆位置
 
         target_xy = (
@@ -488,18 +488,8 @@ class Processor:
                 width=npc_width,
                 theta=npc_theta
             )
-            # npc_x, npc_y = npc_polygon.exterior.xy
-
-            # block = False
-            # if max(npc_x) < min(car_x):  # 该 npc 在车的前方
-            #     block_range = (min(npc_y), max(npc_y))  # 该 npc 的车道占据范围
-            #     if (block_range[0] < min(car_y) < block_range[1]) or (block_range[0] < max(car_y) < block_range[1]):
-            #         block = True
 
             safe_distance = car_polygon.distance(npc_polygon)
-
-            # if block and safe_distance < 50:  # 保持50米安全距离
-            #     reward -= 100 * (50 - safe_distance) / (50 + safe_distance)
 
             if safe_distance < self.cfgs.dangerous_distance:
                 reward -= 1000 * (self.cfgs.dangerous_distance - safe_distance) / (self.cfgs.dangerous_distance + safe_distance)
@@ -507,26 +497,26 @@ class Processor:
         return reward
 
     def preprocess_fn(self, **kwargs):
-        # assert len(kwargs['env_id']) == len(self.envs_id)
-        if 'rew' in kwargs:
-            n_ready_env = len(kwargs['env_id'])
+        if 'rew' in kwargs:  # obs_next, rew, done, info, policy, env_id
+            ready_env_ids = kwargs['env_id']
+            data_env_ids = kwargs['info']['env_id']
+            for idx, data_id in enumerate(data_env_ids):
+                if kwargs['env_id'][idx] != data_id:
+                    self.logger.info(f'Ready env id: {ready_env_ids}, Info env id: {data_env_ids}')
+
+            n_ready_env = len(data_env_ids)
             obs_next = [None] * n_ready_env
             rew = [0] * n_ready_env
 
-            if n_ready_env != len(kwargs['obs_next']):
-                ready_env_ids = kwargs['env_id']
-                len_obs_next = len(kwargs['obs_next'])
-                self.logger.info(f'Ready env id: {ready_env_ids}, len obs_next is: {len_obs_next}')
-
             for idx in range(n_ready_env):
-                global_env_id = kwargs['env_id'][idx]
-                global_end_obs_next = kwargs['obs_next'][idx]
+                global_env_id = data_env_ids[idx]
+                global_env_obs_next = kwargs['obs_next'][idx]
                 global_env_info = kwargs['info'][idx]
 
-                obs_next[idx] = self.get_observation(global_end_obs_next, env_id=global_env_id)
-                rew[idx] = self.compute_reward(global_env_id, global_end_obs_next, global_env_info)
+                obs_next[idx] = self.get_observation(global_env_obs_next, env_id=global_env_id)
+                rew[idx] = self.compute_reward(global_env_id, global_env_obs_next, global_env_info)
 
-                self.env_last_obs[global_env_id] = global_end_obs_next
+                self.env_last_obs[global_env_id] = global_env_obs_next
             obs_next = np.array(obs_next)
             rew = np.array(rew)
             return Batch(obs_next=obs_next, rew=rew, done=kwargs['done'], policy=kwargs['policy'])
