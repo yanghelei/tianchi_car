@@ -48,7 +48,7 @@ config = dict(
     training_num=15,  # 用于训练的环境数目
     test_num=0,  # the number of episodes for one policy evaluation
 
-    logdir='/myspace/rainbow_v6.1',
+    logdir='/myspace/rainbow_v6.2',
     render=0.0,
 
     prioritized_replay=True,
@@ -62,7 +62,7 @@ config = dict(
 
     device='cuda' if torch.cuda.is_available() else 'cpu',
 
-    steer_prime_choices=np.array([-pi/60, -pi/90, -pi / 180, 0, pi / 180, pi/90, pi/60]),  # np.linspace(-pi/18, pi/18, 3)
+    steer_prime_choices=np.array([-pi / 120, -pi / 180, -pi / 360, 0, pi / 360, pi / 180, pi / 120]),  # np.linspace(-pi/18, pi/18, 3)
     acc_prime_choice=np.array([-0.08, 0, 0.08]),
     action_per_dim=(7, 3),
 

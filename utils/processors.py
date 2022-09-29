@@ -412,15 +412,11 @@ class Processor:
             fastly_brake = True
 
         big_turn = False
-        curr_vel = car_status[3]
-        prev_steer = round(car_status[7], 2)
-        prev_acc = round(car_status[8], 2)
-        car_lateral_acc = round(car_status[5], 2)
-        last_car_lateral_acc = round(last_car_status[5], 2)
+        car_lateral_acc = car_status[5]
+        last_car_lateral_acc = last_car_status[5]
         acc_prime = abs((car_lateral_acc - last_car_lateral_acc) / self.dt)
         if abs(car_lateral_acc) > 4 or acc_prime > 0.9:
             big_turn = True
-            self.logger.info(f'[BigTurn] - Vel:{curr_vel}, Acc:{car_lateral_acc}, Last Acc:{last_car_lateral_acc}, Acc Prime:{acc_prime}, Last Action:[{prev_steer}, {prev_acc}]')
 
         speed_accept_ratio = 1.0
         lane_list = []
@@ -464,8 +460,11 @@ class Processor:
 
         npc_reward = self.get_npc_rewards(car_polygon, next_obs["npcs"])
 
-        if fastly_brake or big_turn or outside_danger or over_speed:
+        if outside_danger:
             rule_reward = -100
+        elif fastly_brake or big_turn or over_speed:
+            self.logger.info(f'[FastlyBrake]:{fastly_brake}, [BigTurn]:{big_turn}, [OverSpeed]:{over_speed}.')
+            rule_reward = -5
         else:
             rule_reward = distance_close * keep_line_ratio * speed_accept_ratio
 
