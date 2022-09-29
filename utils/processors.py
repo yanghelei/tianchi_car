@@ -292,16 +292,16 @@ class Processor:
             safe_distance = car_polygon.distance(npc_polygon)
 
             npc_x, npc_y = npc_polygon.exterior.xy
-            # block_x_range = (min(npc_x), max(npc_x))
-            # block_y_range = (min(npc_y), max(npc_y))
+            block_x_range = (min(npc_x), max(npc_x))
+            block_y_range = (min(npc_y), max(npc_y))
 
-            # if block_x_range[0] < min(car_x) < block_x_range[1] or block_x_range[0] < max(car_x) < block_x_range[1]:  # 如果 car 和 npc 并排前行
-            #     if max(car_y) < block_y_range[0]:  # car 在 npc 的左侧
-            #         if safe_distance < 0.3 and curr_yaw > 0:  # 小于安全距离并且车头仍朝右
-            #             steer_masks[1] = False  # 右转屏蔽
-            #     elif min(car_y) > block_y_range[1]:  # car 在 npc 的右侧
-            #         if safe_distance < 0.3 and curr_yaw < 0:  # 小于安全距离并且车头仍朝左
-            #             steer_masks[0] = False  # 左转屏蔽
+            if block_x_range[0] < min(car_x) < block_x_range[1] or block_x_range[0] < max(car_x) < block_x_range[1]:  # 如果 car 和 npc 并排前行
+                if max(car_y) < block_y_range[0]:  # car 在 npc 的左侧
+                    if safe_distance < 0.3 and curr_yaw > 0:  # 小于安全距离并且车头仍朝右
+                        steer_masks[1] = False  # 右转屏蔽
+                elif min(car_y) > block_y_range[1]:  # car 在 npc 的右侧
+                    if safe_distance < 0.3 and curr_yaw < 0:  # 小于安全距离并且车头仍朝左
+                        steer_masks[0] = False  # 左转屏蔽
 
             npc_dx = npc_x - np.array(curr_xy[0])
             npc_dy = npc_y - np.array(curr_xy[1])
@@ -360,9 +360,9 @@ class Processor:
             acc_prime_mask = np.ones((len(self.action_library),), dtype=np.bool_)
 
         if min(car_y) < 1:  # 车辆压左线
-            steer_prime_mask = self.action_library[:, 0] <= 0
+            steer_prime_mask = self.action_library[:, 0] < 0
         elif max(car_y) > 1 + 3.75 * 3 > 0:  # 车辆压右线
-            steer_prime_mask = self.action_library[:, 0] >= 0
+            steer_prime_mask = self.action_library[:, 0] > 0
         else:
             steer_prime_mask = np.ones((len(self.action_library),), dtype=np.bool_)
 
@@ -431,10 +431,13 @@ class Processor:
             current_offset = 10
             speed_limit = 1.0
 
+        over_speed = False
         car_speed = car_status[3]  # 当前车速
         if car_speed > speed_limit:  # 当前车速超过车道限速
             over_speed_ratio = (car_speed - speed_limit) / speed_limit  # 超过规定限速的百分比
             speed_accept_ratio = max((0.2 - over_speed_ratio) / 0.2, 0)
+            if speed_accept_ratio == 0:
+                over_speed = True
 
         car_polygon = get_polygon(
             center=curr_xy,
@@ -456,7 +459,7 @@ class Processor:
 
         npc_reward = self.get_npc_rewards(car_polygon, next_obs["npcs"])
 
-        if fastly_brake or big_turn or outside_danger:
+        if fastly_brake or big_turn or outside_danger or over_speed:
             rule_reward = -100
         else:
             rule_reward = distance_close * keep_line_ratio * speed_accept_ratio

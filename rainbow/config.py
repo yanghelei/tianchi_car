@@ -30,7 +30,7 @@ config = dict(
     v_min=-10.0,
     v_max=10.0,
 
-    noisy_std=0.3,
+    noisy_std=0.15,
     n_step=5,  # the number of steps to look ahead. Default to 1.
     target_update_freq=1e4,  # 3e4
 
@@ -48,7 +48,7 @@ config = dict(
     training_num=15,  # 用于训练的环境数目
     test_num=0,  # the number of episodes for one policy evaluation
 
-    logdir='/myspace/rainbow_v6.0.0',
+    logdir='/myspace/rainbow_v6.1',
     render=0.0,
 
     prioritized_replay=True,
@@ -62,9 +62,9 @@ config = dict(
 
     device='cuda' if torch.cuda.is_available() else 'cpu',
 
-    steer_prime_choices=np.array([-pi / 18, 0, pi / 18]),  # np.linspace(-pi/18, pi/18, 3)
-    acc_prime_choice=np.array([-0.8, 0, 0.8]),
-    action_per_dim=(3, 3),
+    steer_prime_choices=np.array([-pi/60, -pi/90, -pi / 180, 0, pi / 180, pi/90, pi/60]),  # np.linspace(-pi/18, pi/18, 3)
+    acc_prime_choice=np.array([-0.08, 0, 0.08]),
+    action_per_dim=(7, 3),
 
     network=dict(
         sur_in=12,
@@ -111,5 +111,6 @@ _debug_cfg.step_per_epoch = 3e1
 _debug_cfg.step_per_collect = 16
 _debug_cfg.min_episode_per_collect = 1
 _debug_cfg.training_num = 4
+_debug_cfg.logdir = '/Users/heyray/myspace/rainbow_v6.0.0'
 
 debug_cfg = _debug_cfg
