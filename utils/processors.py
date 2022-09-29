@@ -352,10 +352,10 @@ class Processor:
         # action mask module
         if curr_velocity > speed_limit and prev_acc > 0:
             # 如果【当前速度大于该条车道的限速】，并且【当前加速度大于零（车辆仍在加速状态）】
-            acc_prime_mask = self.action_library[:, 1] <= 0  # 速度太快，屏蔽继续加速的动作
+            acc_prime_mask = self.action_library[:, 1] < 0  # 速度太快，屏蔽继续加速的动作
         elif curr_velocity < speed_limit * 0.6 and prev_acc < 0:
             # 如果【当前速度小于该条车道的限速的60%】，并且【当前加速度小于零（车辆仍在减速状态）】
-            acc_prime_mask = self.action_library[:, 1] >= 0  # 速度太慢，屏蔽继续减速的动作
+            acc_prime_mask = self.action_library[:, 1] > 0  # 速度太慢，屏蔽继续减速的动作
         else:
             acc_prime_mask = np.ones((len(self.action_library),), dtype=np.bool_)
 
@@ -412,10 +412,15 @@ class Processor:
             fastly_brake = True
 
         big_turn = False
-        car_lateral_acc = car_status[5]
-        last_car_lateral_acc = last_car_status[5]
-        if abs(car_lateral_acc) > 4 or abs((car_lateral_acc - last_car_lateral_acc) / self.dt) > 0.9:
+        curr_vel = car_status[3]
+        prev_steer = round(car_status[7], 2)
+        prev_acc = round(car_status[8], 2)
+        car_lateral_acc = round(car_status[5], 2)
+        last_car_lateral_acc = round(last_car_status[5], 2)
+        acc_prime = abs((car_lateral_acc - last_car_lateral_acc) / self.dt)
+        if abs(car_lateral_acc) > 4 or acc_prime > 0.9:
             big_turn = True
+            self.logger.info(f'[BigTurn] - Vel:{curr_vel}, Acc:{car_lateral_acc}, Last Acc:{last_car_lateral_acc}, Acc Prime:{acc_prime}, Last Action:[{prev_steer}, {prev_acc}]')
 
         speed_accept_ratio = 1.0
         lane_list = []
