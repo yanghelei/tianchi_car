@@ -460,13 +460,15 @@ class Processor:
 
         npc_reward = self.get_npc_rewards(car_polygon, next_obs["npcs"])
 
+        rule_reward = 0
         if outside_danger:
-            rule_reward = -100
-        elif fastly_brake or big_turn or over_speed:
-            self.logger.info(f'[FastlyBrake]:{fastly_brake}, [BigTurn]:{big_turn}, [OverSpeed]:{over_speed}.')
-            rule_reward = -5
-        else:
-            rule_reward = distance_close * keep_line_ratio * speed_accept_ratio
+            rule_reward -= 100
+        if fastly_brake or over_speed:
+            rule_reward -= 5
+        if big_turn:
+            rule_reward -= 1
+
+        rule_reward += distance_close * keep_line_ratio * speed_accept_ratio
 
         if info["collided"]:  # 碰撞
             end_reward = -1000
