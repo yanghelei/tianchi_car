@@ -47,7 +47,7 @@ class MyRainbow(RainbowPolicy):
         for _idx in range(len(act)):
             _act = act[_idx]
             _steer_prime, _acc_prime = self.action_library[_act]
-            _steer = np.clip(_steer_prime, -pi/60.0, pi/60.0)
+            _steer = np.clip(obs[_idx][-1][0][5] + _steer_prime, -pi/60.0, pi/60.0)
             _acc = np.clip(obs[_idx][-1][0][7] + _acc_prime, -2.0, 2.0)
             action.append([_steer, _acc])
         return np.array(action, dtype=np.float32)

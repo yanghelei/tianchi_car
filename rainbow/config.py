@@ -15,7 +15,7 @@ config = dict(
     exploration=dict(
         type='exp',
         start=0.95,
-        end=0.10,
+        end=0.05,
         decay=5e5
     ),
     # eps_train=0.1,
@@ -48,7 +48,7 @@ config = dict(
     training_num=15,  # 用于训练的环境数目
     test_num=0,  # the number of episodes for one policy evaluation
 
-    logdir='/myspace/rainbow_v6.3',
+    logdir='/myspace/rainbow_v6.4',
     render=0.0,
 
     prioritized_replay=True,
@@ -62,7 +62,7 @@ config = dict(
 
     device='cuda' if torch.cuda.is_available() else 'cpu',
 
-    steer_prime_choices=np.linspace(-pi/60, pi/60, 7),  # np.linspace(-pi/18, pi/18, 3)
+    steer_prime_choices=np.linspace(-pi/120, pi/120, 7),  # np.linspace(-pi/18, pi/18, 3)
     acc_prime_choice=np.array([-0.08, 0, 0.08]),
     action_per_dim=(7, 3),
 

@@ -453,10 +453,11 @@ class Processor:
         if min(y) < 1 or max(y) > 3.75 * 3:  # 车辆压线
             outside_danger = True
 
-        if get_current_line(min(y)) == get_current_line(max(y)):  # 当前车辆的整体均处于相同车道
-            keep_line_ratio = 1
-        else:
-            keep_line_ratio = 0
+        keep_line_ratio = 1
+        # if get_current_line(min(y)) == get_current_line(max(y)):  # 当前车辆的整体均处于相同车道
+        #     keep_line_ratio = 1
+        # else:
+        #     keep_line_ratio = 0
 
         npc_reward = self.get_npc_rewards(car_polygon, next_obs["npcs"])
 
@@ -468,7 +469,8 @@ class Processor:
         if big_turn:
             rule_reward -= 1
 
-        rule_reward += distance_close * keep_line_ratio * speed_accept_ratio
+        if rule_reward == 0:  # 未犯规
+            rule_reward = distance_close * keep_line_ratio * speed_accept_ratio
 
         if info["collided"]:  # 碰撞
             end_reward = -1000
