@@ -21,7 +21,7 @@ from train.config import PolicyParam
 
 Transition = namedtuple(
     "Transition",
-    ("sur_obs", "vec_obs", "value", "action", 'gaussian_action', "logproba", "mask", "reward", "info",),
+    ("sur_obs", "vec_obs", "value", "action", 'gaussian_action', "logproba", "mask", "reward", "base_reward", "collide_reward", "rule_reward", "info",),
 )
 Get_Enough_Batch = mp.Value("i", 0) # 标志位：是否采集了足够的样本数
 
@@ -87,7 +87,7 @@ class EnvWorker(mp.Process):
     def _set_actions_map(action_num):
         #dicretise action space
         forces = np.linspace(-0.7, 0.7, num=11, endpoint=True)
-        thetas = np.linspace(-0.13, 0.13, num=11, endpoint=True) # 5 度
+        thetas = np.linspace(-0.13, 0.13, num=11, endpoint=True) # 7度
         actions = [[force, theta] for force in forces for theta in thetas]
         actions_map = {i:actions[i] for i in range(action_num)}
         return actions_map 
@@ -139,10 +139,13 @@ class EnvWorker(mp.Process):
                             if not done:
                                 new_env_state = self.env_post_processer.assemble_surr_vec_obs(obs)
                                 new_vec_state = self.env_post_processer.assemble_ego_vec_obs(obs)
-                            reward = self.env_post_processer.assemble_reward(obs, info, balance)
+                            reward, reward_dict = self.env_post_processer.assemble_reward(obs, info, balance)
+                            base_reward = reward_dict['base_reward']
+                            collide_reward = reward_dict['collide_reward']
+                            rule_reward = reward_dict['rule_reward']
                             mask = 0 if done else 1
                             episode.push(
-                                env_state, vec_state, value, action, gaussian_action, logproba, mask, reward, info,
+                                env_state, vec_state, value, action, gaussian_action, logproba, mask, reward, base_reward, collide_reward, rule_reward, info,
                             )
                             if done:
                                 with self.lock:
@@ -184,10 +187,13 @@ class EnvWorker(mp.Process):
                             if not done:
                                 new_env_state = self.env_post_processer.assemble_surr_vec_obs(obs)
                                 new_vec_state = self.env_post_processer.assemble_ego_vec_obs(obs)
-                            reward = self.env_post_processer.assemble_reward(obs, info)
+                            reward, reward_dict = self.env_post_processer.assemble_reward(obs, info)
+                            base_reward = reward_dict['base_reward']
+                            collide_reward = reward_dict['collide_reward']
+                            rule_reward = reward_dict['rule_reward']
                             mask = 0 if done else 1
                             episode.push(
-                                env_state, vec_state, value, action, gaussian_action, logproba, mask, reward, info,
+                                env_state, vec_state, value, action, gaussian_action, logproba, mask, reward, base_reward, collide_reward, rule_reward, info,
                             )
                             if done:
                                 with self.lock:

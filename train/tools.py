@@ -290,8 +290,9 @@ class EnvPostProcsser:
         if balance is not None:
             rule_reward_balance = balance
         total_reward = base_reward + collide_reward_balance*collide_reward + rule_reward_balance*rule_reward 
+        info = dict(base_reward=base_reward, collide_reward=collide_reward, rule_reward=rule_reward)
 
-        return total_reward
+        return total_reward, info
 
     def reset(self, initial_obs):
         self.prev_distance = None

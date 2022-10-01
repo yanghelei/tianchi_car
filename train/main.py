@@ -269,13 +269,16 @@ class MulProPPO:
                     loss_entropy=loss_entropy.item(), loss_value=loss_value.item())
         return info
 
-    def log(self, memory, rewards, info, episode):
+    def log(self, memory, rewards, base_rewards, collide_rewards, rule_rewards, info, episode):
         
         total_loss = info['total_loss']
         loss_surr = info['loss_surr']
         loss_value = info['loss_value']
         loss_entropy = info['loss_entropy']
         mean_reward = (np.sum(rewards) / memory.num_episode)
+        mean_collide_reward = (np.sum(collide_rewards) / memory.num_episode)
+        mean_base_reward = (np.sum(base_rewards) / memory.num_episode)
+        mean_rule_reward = (np.sum(rule_rewards) / memory.num_episode)
         mean_step = len(memory) // memory.num_episode
         reach_goal_rate = memory.arrive_goal_num / memory.num_episode
 
@@ -303,6 +306,9 @@ class MulProPPO:
             "lr: " + str(round(self.lr, 5)) + ' clip: '+ str(round(self.clip, 5)) + ' entropy: '+str(round(self.beta, 5)))
         self.logger.info('balance:' + str(round(self.balance, 5)))
         self.writer.scalar_summary("reward", mean_reward, episode)
+        self.writer.scalar_summary('base_reward', mean_base_reward, episode)
+        self.writer.scalar_summary('collide_reward', mean_collide_reward, episode)
+        self.writer.scalar_summary('rule_reward', mean_rule_reward, episode)
         self.writer.scalar_summary("reach_goal_rate", reach_goal_rate, episode)
         self.writer.scalar_summary('pi_loss', loss_surr, episode)
         self.writer.scalar_summary('value_loss', loss_value, episode)
@@ -332,7 +338,7 @@ class MulProPPO:
                 self.logger.info(
                 "----------------------" + str(i_episode) + "-------------------------"
                                 ) 
-                self.log(memory, batch.reward, info, i_episode)
+                self.log(memory, batch.reward, batch.base_reward, batch.collide_reward, batch.rule_reward, info, i_episode)
                 
             if (i_episode % self.args.eval_interval == 0 or i_episode == (self.num_episode-1)) and self.args.use_eval:
                 memory = self.sampler.eval(self.model, self.args.eval_episode)
@@ -361,6 +367,9 @@ class MulProPPO:
                 self.writer.show('Eval Mean Step')
                 self.writer.show('reach_goal_rate')
                 self.writer.show('reward')
+                self.writer.show('base_reward')
+                self.writer.show('collide_reward')
+                self.writer.show('rule_reward')
                 self.writer.show('approx_kl')
                 self.writer.show('value_loss')
                 self.writer.show('pi_loss')
