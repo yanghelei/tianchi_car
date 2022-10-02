@@ -77,10 +77,10 @@ def run(worker_index):
                 ckpt =torch.load(model_dir+f'/checkpoint_{start_episode}.pth', 'cpu')
             model_state_dict = ckpt['model_state_dict']
             model.load_state_dict(model_state_dict)
-            logger.info('model has been successfully loaded')
+            logger.info(f'model_{start_episode} has been successfully loaded')
         vec_state, env_state = env_post_processer.reset(obs)
         while True:
-            action, _, _, _ = model.select_action(env_state, vec_state, False)
+            action, _, _, _ = model.select_action(env_state, vec_state, True)
             env_action = action_transform(action, PolicyParam.gaussian)
             for _ in range(action_repeat):
                 obs, _, done, info = env.step(env_action)
