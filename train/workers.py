@@ -38,8 +38,8 @@ class Episode(object):
     def __init__(self):
         self.episode = []
 
-    def push(self, *args):
-        self.episode.append(Transition(*args))
+    def push(self, *params):
+        self.episode.append(Transition(*params))
 
     def __len__(self):
         return len(self.episode)
@@ -223,21 +223,21 @@ class EnvWorker(mp.Process):
 
 
 class MemorySampler(object):
-    def __init__(self, args, logger, stage):
+    def __init__(self, params, logger, args):
         self.logger = logger
-        self.args = args
-        self.num_workers = args.num_workers
-        self.seed = args.seed
+        self.params = params
+        self.num_workers = params.num_workers
+        self.seed = params.seed
         self.batch_size = args.batch_size
-        self.device = args.device
-        self.obs_type = args.obs_type
-        self.stage = stage
+        self.device = params.device
+        self.obs_type = params.obs_type
+        self.stage = args.stage
         self.queue = mp.Queue()
         self.lock = mp.Lock()
 
         self.remotes, self.work_remotes = zip(*[mp.Pipe() for _ in range(self.num_workers)])
         self.workers = [
-            EnvWorker(remote, self.queue, self.lock, args.seed + index, index, stage)
+            EnvWorker(remote, self.queue, self.lock, params.seed + index, index, self.stage)
             for index, remote in enumerate(self.work_remotes)
         ]
 

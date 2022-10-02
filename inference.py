@@ -80,7 +80,7 @@ def run(worker_index):
             logger.info('model has been successfully loaded')
         vec_state, env_state = env_post_processer.reset(obs)
         while True:
-            action, _, _, _ = model.select_action(env_state, vec_state, True)
+            action, _, _, _ = model.select_action(env_state, vec_state, False)
             env_action = action_transform(action, PolicyParam.gaussian)
             for _ in range(action_repeat):
                 obs, _, done, info = env.step(env_action)

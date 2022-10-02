@@ -26,8 +26,6 @@ class PolicyParam():
         num_workers = 1
         warmup_episode = 0
         num_episode = 20
-        batch_size = 600
-        minibatch_size = 600
         num_epoch = 3
         save_num_episode = 1
         eval_episode: int = 1
@@ -38,8 +36,6 @@ class PolicyParam():
         num_workers: int = 15
         warmup_episode: int = 10
         num_episode: int = 1200
-        batch_size: int = 5120
-        minibatch_size: int = 512
         num_epoch: int = 3
         save_num_episode = 100
         eval_episode: int = 200

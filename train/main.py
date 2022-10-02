@@ -25,15 +25,16 @@ import re
 logger = Logger.get_logger(__name__)
 
 class MulProPPO:
-    def __init__(self, logger, task_name, load, stage, start_episode=0):
-        self.args = PolicyParam
+    def __init__(self, logger, args):
+        self.params = PolicyParam
+        self.args = args
         self.logger = logger
         self.global_sample_size = 0
-        self.task_name = task_name
-        self.load = load
-        self.stage = stage
+        self.task_name = args.task_name
+        self.load = args.load
+        self.stage = args.stage
         self.best_reach_rate = -np.inf
-        self.start_episode = start_episode
+        self.start_episode = args.start_episode
         # schedule
         self.lr_schedule = PolicyParam.learning_rate_schedule
         self.beta_schedule = PolicyParam.beta_schedule
@@ -45,30 +46,30 @@ class MulProPPO:
         self.lr = self.lr_schedule['initial']
         self.balance = self.balance_schedule['initial']
         self.loss_ratio = self.loss_ratio_schedule['initial']
-        self.loss_value_coeff = self.args.loss_coeff_value
+        self.loss_value_coeff = self.params.loss_coeff_value
         self._make_dir()
-        torch.manual_seed(self.args.seed)
-        np.random.seed(self.args.seed)
-        if self.args.device == "cuda":
-            torch.cuda.manual_seed(self.args.seed)
-        self.sampler = MemorySampler(self.args, self.logger, stage)
-        if self.args.gaussian:
-            self.model = PPOPolicy(2).to(self.args.device)
+        torch.manual_seed(self.params.seed)
+        np.random.seed(self.params.seed)
+        if self.params.device == "cuda":
+            torch.cuda.manual_seed(self.params.seed)
+        self.sampler = MemorySampler(self.params, self.logger, args)
+        if self.params.gaussian:
+            self.model = PPOPolicy(2).to(self.params.device)
         else:
-            self.model = CategoricalPPOPolicy(CommonConfig.action_num).to(self.args.device)
+            self.model = CategoricalPPOPolicy(CommonConfig.action_num).to(self.params.device)
         self.optimizer = opt.Adam(self.model.parameters(), lr=self.lr)
-        if self.args.use_value_norm:
-            self.value_norm = Normalization(1, device = self.args.device)
-        if load:
+        if self.params.use_value_norm:
+            self.value_norm = Normalization(1, device = self.params.device)
+        if args.load:
             if self.start_episode == 0:
                 self.load_checkpoint()
             else:
-                self.load_checkpoint(self.args.model_path+f'/checkpoint_{start_episode}.pth')
-        self.num_episode = self.start_episode + self.args.num_episode
+                self.load_checkpoint(self.params.model_path+f'/checkpoint_{args.start_episode}.pth')
+        self.num_episode = self.start_episode + self.params.num_episode
         if not self.load:
             self.warmup_episode = self.start_episode
         else:
-            self.warmup_episode = self.start_episode + self.args.warmup_episode
+            self.warmup_episode = self.start_episode + self.params.warmup_episode
         self.start_time = time.time()
         
     def _make_dir(self):
@@ -86,7 +87,7 @@ class MulProPPO:
     def _read_history_models(self):
         all_index = []
         number = re.compile(r'\d+')
-        files = os.listdir(self.args.model_path)
+        files = os.listdir(self.params.model_path)
         for file in files:
             index = number.findall(file)
             if len(index) > 0:
@@ -95,7 +96,7 @@ class MulProPPO:
         return all_index 
 
     def load_model(self):
-        path = self.args.model_path+f'/network_{self.start_episode}.pth'
+        path = self.params.model_path+f'/network_{self.start_episode}.pth'
         checkpoint = torch.load(path)
         self.model.load_state_dict(checkpoint)
         self.logger.info(f'Successfully load pre-trained model : {path}')
@@ -105,7 +106,7 @@ class MulProPPO:
         if path is None:
             index = self._read_history_models()
             latest_index = index[-1]
-            path = self.args.model_path+f'/checkpoint_{latest_index}.pth'
+            path = self.params.model_path+f'/checkpoint_{latest_index}.pth'
         checkpoint = torch.load(path)
         self.start_episode = checkpoint['episode']
         self.model.load_state_dict(checkpoint['model_state_dict'])
@@ -130,8 +131,8 @@ class MulProPPO:
         newvalues = self.model.get_value(env_state).flatten()
         value_pred_clipped = old_values + (
             newvalues - old_values
-        ).clamp(-self.args.vf_clip_param, self.args.vf_clip_param)
-        if self.args.use_value_norm:
+        ).clamp(-self.params.vf_clip_param, self.params.vf_clip_param)
+        if self.params.use_value_norm:
             value_losses = 0.5*(newvalues - self.value_norm.normalize(returns)).pow(2)
             value_loss_clip = 0.5*(value_pred_clipped - self.value_norm.normalize(returns)).pow(2)
             loss_value = torch.max(value_losses, value_loss_clip).mean()
@@ -139,7 +140,7 @@ class MulProPPO:
             value_losses = 0.5*(newvalues - returns).pow(2)
             value_loss_clip = 0.5*(value_pred_clipped - returns).pow(2)
 
-        if self.args.use_clipped_value_loss:
+        if self.params.use_clipped_value_loss:
             loss_value = torch.max(value_losses, value_loss_clip).mean()
         else:
             loss_value = torch.mean((newvalues - returns).pow(2))
@@ -180,32 +181,32 @@ class MulProPPO:
         prev_advantage = torch.Tensor([0])
         prev_value = torch.Tensor([0])
         for i in reversed(range(batch_size)):
-            if self.args.use_value_norm:
-                deltas[i] = rewards[i] + self.args.gamma*self.value_norm.denormalize(prev_value) \
+            if self.params.use_value_norm:
+                deltas[i] = rewards[i] + self.params.gamma*self.value_norm.denormalize(prev_value) \
                             *masks[i] - self.value_norm.denormalize(values[i])
-                advantages[i] = deltas[i] + self.args.gamma * self.args.lamda * prev_advantage * masks[i]
+                advantages[i] = deltas[i] + self.params.gamma * self.params.lamda * prev_advantage * masks[i]
                 returns[i] = advantages[i] + self.value_norm.denormalize(values[i]) # TD-lamda return
             else: 
-                deltas[i] = rewards[i] + self.args.gamma*prev_value \
+                deltas[i] = rewards[i] + self.params.gamma*prev_value \
                             *masks[i] - values[i]
-                advantages[i] = deltas[i] + self.args.gamma * self.args.lamda * prev_advantage * masks[i]
+                advantages[i] = deltas[i] + self.params.gamma * self.params.lamda * prev_advantage * masks[i]
                 returns[i] = advantages[i] + values[i]
 
             prev_advantage = advantages[i]
             prev_value = values[i]
         # update returns
-        if self.args.use_value_norm:
+        if self.params.use_value_norm:
             self.value_norm.update(returns)
-        sur_obs = sur_obs.to(self.args.device)
-        values = values.to(self.args.device)
-        vec_obs = vec_obs.to(self.args.device)
-        actions = actions.to(self.args.device)
-        gaussian_actions = gaussian_actions.to(self.args.device)
-        oldlogproba = oldlogproba.to(self.args.device)
-        advantages = advantages.to(self.args.device)
-        returns = returns.to(self.args.device)
+        sur_obs = sur_obs.to(self.params.device)
+        values = values.to(self.params.device)
+        vec_obs = vec_obs.to(self.params.device)
+        actions = actions.to(self.params.device)
+        gaussian_actions = gaussian_actions.to(self.params.device)
+        oldlogproba = oldlogproba.to(self.params.device)
+        advantages = advantages.to(self.params.device)
+        returns = returns.to(self.params.device)
         
-        for i_epoch in range(self.args.num_epoch):
+        for i_epoch in range(self.params.num_epoch):
             rand = np.random.permutation(batch_size)
             minibatch_size = min(batch_size, self.args.minibatch_size)
             num_mini_batch = batch_size // minibatch_size
@@ -221,12 +222,12 @@ class MulProPPO:
                 minibatch_gussain_actions = gaussian_actions[minibatch_ind]
                 minibatch_advantages = advantages[minibatch_ind]
                 # apply the advantage norm in the minibatch not the full_batch
-                if self.args.use_advantage_norm:
+                if self.params.use_advantage_norm:
                     minibatch_advantages = (minibatch_advantages - minibatch_advantages.mean()) \
-                                            / (minibatch_advantages.std() + self.args.EPS)
+                                            / (minibatch_advantages.std() + self.params.EPS)
                 minibatch_returns = returns[minibatch_ind]
 
-                if self.args.gaussian:
+                if self.params.gaussian:
                     loss_surr, loss_entropy, approx_kl = self.cal_pi_loss(
                                                             minibatch_oldlogproba, 
                                                             minibatch_env_state, 
@@ -249,16 +250,16 @@ class MulProPPO:
                     + self.beta * loss_entropy
                 )
 
-                if self.args.use_target_kl:
-                    if approx_kl > 1.5*self.args.target_kl:
+                if self.params.use_target_kl:
+                    if approx_kl > 1.5*self.params.target_kl:
                         self.logger.info(f'Episode:{episode} Early stopping at epoch {i_epoch} due to reaching max kl.')
                 # update lr 
                 for pg in self.optimizer.param_groups:
                     pg["lr"] = self.lr
                 self.optimizer.zero_grad()
                 (loss_coef*total_loss).backward()
-                if self.args.use_clip_grad:
-                    nn.utils.clip_grad_norm_(self.model.parameters(), self.args.max_grad_norm)
+                if self.params.use_clip_grad:
+                    nn.utils.clip_grad_norm_(self.model.parameters(), self.params.max_grad_norm)
                 # before training , rollout out some random episode to initiate
                 if episode >= self.warmup_episode:
                     self.optimizer.step()
@@ -339,7 +340,7 @@ class MulProPPO:
                 + "*"
                 + str(round(fail_loss_entropy,3))
             )
-        self.logger.info('Gaussian Policy:' + str(self.args.gaussian))
+        self.logger.info('Gaussian Policy:' + str(self.params.gaussian))
         self.logger.info("Step: " + str(mean_step))
         self.logger.info("total data number: " + str(self.global_sample_size))
         self.logger.info(
@@ -393,14 +394,14 @@ class MulProPPO:
                 info = self.update(total_batch, i_episode, batch_size, loss_coef=1)
 
             # log 
-            if i_episode % self.args.log_num_episode == 0 or i_episode == (self.num_episode-1):
+            if i_episode % self.params.log_num_episode == 0 or i_episode == (self.num_episode-1):
                 self.logger.info(
                 "----------------------" + str(i_episode) + "-------------------------"
                                 ) 
                 self.log(total_memory, total_batch.reward, total_batch.base_reward, total_batch.collide_reward, total_batch.rule_reward, info, i_episode, success_info=success_info, failed_info=failed_info)
                 
-            if (i_episode % self.args.eval_interval == 0 or i_episode == (self.num_episode-1)) and self.args.use_eval:
-                memory = self.sampler.eval(self.model, self.args.eval_episode)
+            if (i_episode % self.params.eval_interval == 0 or i_episode == (self.num_episode-1)) and self.params.use_eval:
+                memory = self.sampler.eval(self.model, self.params.eval_episode)
                 batch = memory.sample()
                 mean_reward = np.sum(batch.reward) / memory.num_episode
                 mean_step = len(memory) // memory.num_episode
@@ -435,7 +436,7 @@ class MulProPPO:
                 self.writer.show('entropy_loss')
                 self.writer.show('mean_step')
 
-            if i_episode % self.args.save_num_episode == 0 and i_episode > (self.warmup_episode) or i_episode == (self.num_episode-1):
+            if i_episode % self.params.save_num_episode == 0 and i_episode > (self.warmup_episode) or i_episode == (self.num_episode-1):
                 save_path = remote_path + f"/checkpoint_{i_episode}.pth"
                 self.save_checkpoint(save_path, i_episode, self.best_reach_rate)
 
@@ -448,9 +449,11 @@ if __name__ == "__main__":
     parser.add_argument('--load', action='store_true', default=False)
     parser.add_argument('--start_episode', type=int, default=0)
     parser.add_argument('--stage', type=int, default=1)
+    parser.add_argument('--batch_size', type=int, default=5120)
+    parser.add_argument('--minibatch_size', type=int, default=512)
     args = parser.parse_args()
     remote_path = CommonConfig.remote_path
     os.makedirs(remote_path, exist_ok=True)
     torch.set_num_threads(1)
-    mpp = MulProPPO(logger, args.task_name, args.load, args.stage, args.start_episode)
+    mpp = MulProPPO(logger, args)
     mpp.train()
