@@ -71,7 +71,7 @@ class PolicyParam():
             }
     beta_schedule={
             "initial": 0.01,
-            "final": 0.001,
+            "final": 0.005,
             "power": 1.0,
             "max_decay_steps": 10000
             }
@@ -88,6 +88,12 @@ class PolicyParam():
         "power": 1.0,
         "max_decay_steps": 10000
         }
+    loss_ratio_schedule = {
+        'initial':0.5,
+        'final': 0.1,
+        'power': 1.0,
+        'max_decay_steps':5000
+    }
     EPS: float = 1e-10
 
     reload = False

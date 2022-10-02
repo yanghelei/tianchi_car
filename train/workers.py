@@ -18,6 +18,7 @@ from geek.env.logger import Logger
 from geek.env.matrix_env import Scenarios, DoneReason
 from train.tools import EnvPostProcsser
 from train.config import PolicyParam
+from copy import deepcopy
 
 Transition = namedtuple(
     "Transition",
@@ -61,6 +62,15 @@ class Memory(object):
 
     def __len__(self):
         return len(self.memory)
+
+    def __add__(self, memory):
+        
+        total_memory = Memory()
+        total_memory.memory = deepcopy(self.memory) + deepcopy(memory.memory)
+        total_memory.num_episode = self.num_episode + memory.num_episode
+        total_memory.arrive_goal_num = self.arrive_goal_num + memory.arrive_goal_num
+
+        return total_memory
 
 
 class EnvWorker(mp.Process):
@@ -240,14 +250,18 @@ class MemorySampler(object):
 
     def sample(self, policy, balance):
         policy.to("cpu")
-        memory = Memory()
+        success_memory = Memory()
+        failed_memory = Memory()
         Get_Enough_Batch.value = 0
         for remote in self.remotes:
             remote.send(("sample", policy, balance))
 
-        while len(memory) < self.batch_size:
+        while (len(success_memory) + len(failed_memory)) < self.batch_size:
             episode = self.queue.get(True)
-            memory.push(episode)
+            if episode.episode[-1][-1]["reached_stoparea"]:
+                success_memory.push(episode)
+            else:
+                failed_memory.push(episode)
 
         Get_Enough_Batch.value = 1
 
@@ -255,7 +269,7 @@ class MemorySampler(object):
             self.queue.get()
 
         policy.to(self.device)
-        return memory
+        return success_memory, failed_memory
 
     def eval(self, policy, eval_episode, balance=0):
         policy.to('cpu')

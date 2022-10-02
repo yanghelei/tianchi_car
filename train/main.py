@@ -3,6 +3,7 @@
 # * Unauthorized copying of this file, via any medium is strictly prohibited
 # *****************************************************************************
 
+import faulthandler
 import os
 import time
 import numpy as np
@@ -38,10 +39,12 @@ class MulProPPO:
         self.beta_schedule = PolicyParam.beta_schedule
         self.cr_schedule = PolicyParam.clip_range_schedule
         self.balance_schedule = PolicyParam.balance_schedule
+        self.loss_ratio_schedule = PolicyParam.loss_ratio_schedule
         self.clip = self.cr_schedule['initial']
         self.beta = self.beta_schedule['initial']
         self.lr = self.lr_schedule['initial']
         self.balance = self.balance_schedule['initial']
+        self.loss_ratio = self.loss_ratio_schedule['initial']
         self.loss_value_coeff = self.args.loss_coeff_value
         self._make_dir()
         torch.manual_seed(self.args.seed)
@@ -160,7 +163,7 @@ class MulProPPO:
 
         return loss_surr, loss_entropy, approx_kl
 
-    def update(self, batch, episode, batch_size):
+    def update(self, batch, episode, batch_size, loss_coef=0.5):
         
         rewards = torch.from_numpy(np.array(batch.reward))
         values = torch.from_numpy(np.array(batch.value))
@@ -201,15 +204,12 @@ class MulProPPO:
         oldlogproba = oldlogproba.to(self.args.device)
         advantages = advantages.to(self.args.device)
         returns = returns.to(self.args.device)
-
-        rand = np.random.permutation(batch_size)
-        num_mini_batch = batch_size // self.args.minibatch_size
-        sampler = [rand[i*self.args.minibatch_size:(i+1)*self.args.minibatch_size] for i in range(num_mini_batch)]
         
         for i_epoch in range(self.args.num_epoch):
             rand = np.random.permutation(batch_size)
-            num_mini_batch = batch_size // self.args.minibatch_size
-            sampler = [rand[i*self.args.minibatch_size:(i+1)*self.args.minibatch_size] for i in range(num_mini_batch)]
+            minibatch_size = min(batch_size, self.args.minibatch_size)
+            num_mini_batch = batch_size // minibatch_size
+            sampler = [rand[i*minibatch_size:(i+1)*minibatch_size] for i in range(num_mini_batch)]
             for minibatch_ind in sampler:
                 minibatch_sur_obs = sur_obs[minibatch_ind]
                 minibatch_ego_obs = vec_obs[minibatch_ind]
@@ -243,7 +243,7 @@ class MulProPPO:
                                                  minibatch_values, 
                                                 minibatch_returns)
 
-                total_loss = (
+                total_loss = loss_coef*(
                     loss_surr
                     + self.loss_value_coeff * loss_value
                     + self.beta * loss_entropy
@@ -269,12 +269,13 @@ class MulProPPO:
                     loss_entropy=loss_entropy.item(), loss_value=loss_value.item())
         return info
 
-    def log(self, memory, rewards, base_rewards, collide_rewards, rule_rewards, info, episode):
+    def log(self, memory, rewards, base_rewards, collide_rewards, rule_rewards, info, episode, success_info=None, failed_info=None):
         
         total_loss = info['total_loss']
         loss_surr = info['loss_surr']
         loss_value = info['loss_value']
         loss_entropy = info['loss_entropy']
+
         mean_reward = (np.sum(rewards) / memory.num_episode)
         mean_collide_reward = (np.sum(collide_rewards) / memory.num_episode)
         mean_base_reward = (np.sum(base_rewards) / memory.num_episode)
@@ -299,12 +300,52 @@ class MulProPPO:
             + "*"
             + str(round(loss_entropy,3))
         )
+        if success_info is not None:
+            total_success_loss = success_info['total_loss']
+            success_loss_surr = success_info['loss_surr']
+            success_loss_value = success_info['loss_value']
+            success_loss_entropy = success_info['loss_entropy']
+            self.logger.info(
+                "total success loss: "
+                + str(round(total_success_loss, 3))
+                + " = "
+                + str(round(success_loss_surr,3))
+                + "+"
+                + str(self.loss_value_coeff)
+                + "*"
+                + str(round(success_loss_value,3))
+                + "+"
+                + str(round(self.beta, 5))
+                + "*"
+                + str(round(success_loss_entropy,3))
+            )
+        if failed_info is not None:
+            total_fail_loss = failed_info['total_loss']
+            fail_loss_surr = failed_info['loss_surr']
+            fail_loss_value = failed_info['loss_value']
+            fail_loss_entropy = failed_info['loss_entropy']
+            
+            self.logger.info(
+                "total fail loss: "
+                + str(round(total_fail_loss, 3))
+                + " = "
+                + str(round(fail_loss_surr,3))
+                + "+"
+                + str(self.loss_value_coeff)
+                + "*"
+                + str(round(fail_loss_value,3))
+                + "+"
+                + str(round(self.beta, 5))
+                + "*"
+                + str(round(fail_loss_entropy,3))
+            )
         self.logger.info('Gaussian Policy:' + str(self.args.gaussian))
         self.logger.info("Step: " + str(mean_step))
         self.logger.info("total data number: " + str(self.global_sample_size))
         self.logger.info(
             "lr: " + str(round(self.lr, 5)) + ' clip: '+ str(round(self.clip, 5)) + ' entropy: '+str(round(self.beta, 5)))
         self.logger.info('balance:' + str(round(self.balance, 5)))
+        self.logger.info('loss_ratio' + str(round(self.loss_ratio, 5)))
         self.writer.scalar_summary("reward", mean_reward, episode)
         self.writer.scalar_summary('base_reward', mean_base_reward, episode)
         self.writer.scalar_summary('collide_reward', mean_collide_reward, episode)
@@ -322,23 +363,41 @@ class MulProPPO:
 
         for i_episode in range(self.start_episode, self.num_episode):
 
-            memory = self.sampler.sample(self.model, self.balance)
-            batch = memory.sample()
-            batch_size = len(memory)
+            success_memory, failed_memory = self.sampler.sample(self.model, self.balance)
+            total_memory = success_memory + failed_memory
+            success_batch_size = len(success_memory)
+            failed_batch_size = len(failed_memory)
+            if success_batch_size > 0: 
+                success_batch = success_memory.sample()
+            if failed_batch_size > 0:
+                failed_batch = failed_memory.sample()
+            total_batch = total_memory.sample()
             # schedule hyper_params
+            batch_size = len(total_memory)
             self.global_sample_size += batch_size
             self.lr = polynomial_decay(self.lr_schedule["initial"], self.lr_schedule["final"], self.lr_schedule["max_decay_steps"], self.lr_schedule["power"], i_episode)
             self.beta = polynomial_decay(self.beta_schedule["initial"], self.beta_schedule["final"], self.beta_schedule["max_decay_steps"], self.beta_schedule["power"], i_episode)
             self.clip = polynomial_decay(self.cr_schedule["initial"], self.cr_schedule["final"], self.cr_schedule["max_decay_steps"], self.cr_schedule["power"], i_episode)
             self.balance = polynomial_increase(self.balance_schedule["initial"], self.balance_schedule["final"], self.balance_schedule["max_decay_steps"], self.balance_schedule["power"], i_episode)
+            self.loss_ratio = polynomial_decay(self.loss_ratio_schedule["initial"], self.loss_ratio_schedule["final"], self.loss_ratio_schedule["max_decay_steps"], self.loss_ratio_schedule["power"], i_episode)
             # update policy
-            info = self.update(batch, i_episode, batch_size)
+            success_info = None
+            failed_info = None 
+            if success_batch_size > 0 and failed_batch_size > 0:
+                success_info = self.update(success_batch, i_episode, success_batch_size, loss_coef=self.loss_ratio)
+                failed_info = self.update(failed_batch, i_episode, failed_batch_size, loss_coef=1-self.loss_ratio)
+                info = {}
+                for key, value in success_info:
+                    info[key] = success_info[key]*self.loss_ratio + failed_info[key]*(1-self.loss_ratio)
+            else:
+                info = self.update(total_batch, i_episode, batch_size, loss_coef=1)
+
             # log 
             if i_episode % self.args.log_num_episode == 0 or i_episode == (self.num_episode-1):
                 self.logger.info(
                 "----------------------" + str(i_episode) + "-------------------------"
                                 ) 
-                self.log(memory, batch.reward, batch.base_reward, batch.collide_reward, batch.rule_reward, info, i_episode)
+                self.log(total_memory, total_batch.reward, total_batch.base_reward, total_batch.collide_reward, total_batch.rule_reward, info, i_episode, success_info=success_info, failed_info=failed_info)
                 
             if (i_episode % self.args.eval_interval == 0 or i_episode == (self.num_episode-1)) and self.args.use_eval:
                 memory = self.sampler.eval(self.model, self.args.eval_episode)
