@@ -65,7 +65,7 @@ class PolicyParam():
     # schedule
     learning_rate_schedule={
             "initial": 1e-4,
-            "final": 1e-5,
+            "final": 5e-5,
             "power": 1.0,
             "max_decay_steps": 10000
             }

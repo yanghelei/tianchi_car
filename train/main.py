@@ -243,7 +243,7 @@ class MulProPPO:
                                                  minibatch_values, 
                                                 minibatch_returns)
 
-                total_loss = loss_coef*(
+                total_loss = (
                     loss_surr
                     + self.loss_value_coeff * loss_value
                     + self.beta * loss_entropy
@@ -256,7 +256,7 @@ class MulProPPO:
                 for pg in self.optimizer.param_groups:
                     pg["lr"] = self.lr
                 self.optimizer.zero_grad()
-                total_loss.backward()
+                (loss_coef*total_loss).backward()
                 if self.args.use_clip_grad:
                     nn.utils.clip_grad_norm_(self.model.parameters(), self.args.max_grad_norm)
                 # before training , rollout out some random episode to initiate
@@ -387,7 +387,7 @@ class MulProPPO:
                 success_info = self.update(success_batch, i_episode, success_batch_size, loss_coef=self.loss_ratio)
                 failed_info = self.update(failed_batch, i_episode, failed_batch_size, loss_coef=1-self.loss_ratio)
                 info = {}
-                for key, value in success_info:
+                for key, value in success_info.items():
                     info[key] = success_info[key]*self.loss_ratio + failed_info[key]*(1-self.loss_ratio)
             else:
                 info = self.update(total_batch, i_episode, batch_size, loss_coef=1)
