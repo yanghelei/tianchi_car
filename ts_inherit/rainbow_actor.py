@@ -139,7 +139,7 @@ class MyActor(nn.Module):
         feats = self.project(feats)
 
         _, feats = self.time_project(feats)
-        feats = feats.squeeze()
+        feats = feats.squeeze(dim=0)
 
         return feats
 
