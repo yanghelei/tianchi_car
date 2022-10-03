@@ -22,7 +22,7 @@ from ts_inherit.rainbow_actor import MyActor
 from ts_inherit.rainbow import MyRainbow
 from tianshou.utils.net.discrete import NoisyLinear
 
-from rainbow.config import cfg
+from rainbow.config import cfg, debug_cfg
 
 cfg.action_space = gym.spaces.Discrete(cfg.action_per_dim[0] * cfg.action_per_dim[1])
 cfg.action_shape = cfg.action_space.n
@@ -71,12 +71,10 @@ def load_policy(cfgs, name):
         if name == 'best_policy.pth':
             best_policy = torch.load(ckpt_path, map_location=cfgs.device)
             _policy.load_state_dict(best_policy)
-            logger.info("Successfully restore policy.")
         else:
-            # checkpoint = torch.load(ckpt_path, map_location=cfgs.device)
-            # _policy.load_state_dict(checkpoint)
-            _policy = torch.load(ckpt_path, map_location=cfgs.device)
-            logger.info("Successfully restore policy.")
+            check_point = torch.load(ckpt_path, map_location=cfgs.device)
+            _policy.load_state_dict(check_point['model'])
+            optim.load_state_dict(check_point['optim'])
     else:
         logger.info(f"Fail to restore policy in {ckpt_path}!")
 
@@ -85,10 +83,15 @@ def load_policy(cfgs, name):
 
 def run(worker_index):
     try:
+        reach_goal = 0
+        episode = 0
+        logger.info(f'worker {worker_index} starting...')
         env = gym.make("MatrixEnv-v1", scenarios=Scenarios.INFERENCE, render_id=str(worker_index))
         obs = env.reset()
         policy = load_policy(cfg, name)
-        policy.train(mode=False)
+        logger.info(f'worker {worker_index} model has been loaded successfully!')
+        policy.eval()
+
         processor = EvalProcessor(cfg)
         while True:
             data = processor.get_observation(observation=obs)
@@ -98,9 +101,12 @@ def run(worker_index):
             obs, reward, done, info = env.step(act)
             infer_done = DoneReason.INFERENCE_DONE == info.get("DoneReason", "")
             if done and not infer_done:
+                episode += 1
                 obs = env.reset()
                 processor.reset()
-                logger.info(f"worker_{worker_index}: done!")
+                if info['reached_stoparea']:
+                    reach_goal += 1
+                    logger.info(f'worker {worker_index}, reach_goal_rate:{reach_goal}/{episode}')
             elif infer_done:
                 break
     except Exception as e:

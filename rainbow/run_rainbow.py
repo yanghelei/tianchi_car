@@ -26,7 +26,7 @@ def make_train_env(cfgs, render_id=None):
     if cfgs.mode == 'train':
         env = gym.make(cfgs.task, scenarios=Scenarios.TRAINING, render_id=str(render_id))
     elif cfgs.mode == 'debug':
-        env = gym.make(cfgs.task, scenarios=Scenarios.TRAINING)
+        env = gym.make(cfgs.task, scenarios=Scenarios.TRAINING, render_id=str(render_id))
     else:
         env = gym.make(cfgs.task, scenarios=Scenarios.TRAINING)
 
