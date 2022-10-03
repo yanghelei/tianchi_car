@@ -46,7 +46,7 @@ class EvalProcessor:
             self.n_ego_n_deque.append(1)
             self.n_ego_vec_deque.append(np.zeros((1, self.ego_dim)))
 
-    def get_observation(self, observation, env_id=None):
+    def get_observation(self, observation):
         curr_xy = (observation["player"]["status"][0], observation["player"]["status"][1])  # 当前车辆位置
 
         target_xy = (
@@ -63,8 +63,16 @@ class EvalProcessor:
         prev_steer = observation["player"]["status"][7]  # 上一个前轮转角命令
         prev_acc = observation["player"]["status"][8]  # 上一个加速度命令
 
-        lane_list = []
+        car_polygon = get_polygon(
+            center=curr_xy,
+            length=self.cfgs.car.length,
+            width=self.cfgs.car.width,
+            theta=curr_yaw
+        )
 
+        car_x, car_y = car_polygon.exterior.xy
+
+        lane_list = []
         if observation["map"] is not None:
             speed_limit = 0.0
             for lane_info in observation["map"].lanes:
@@ -75,14 +83,14 @@ class EvalProcessor:
             current_offset = observation["map"].lane_offset
         else:  # 按照主办方的说法，车开到道路外有可能出现 none 的情况
             current_lane_index = -1.0
-            current_offset = 0.0
+            current_offset = 10.0
             speed_limit = 0.0
 
         ego_obs = np.array(
             [[
                 delta_xy[0],  # 目标区域与当前位置的偏差x
                 delta_xy[1],  # 目标区域与当前位置的偏差y
-                curr_yaw,  # 当前车辆的朝向角
+                wrap_star(curr_yaw),  # 当前车辆的朝向角  # TODO: 指向终点的角度为0
                 curr_velocity,  # 车辆后轴当前纵向速度
                 curr_lateral_acc,  # 车辆当前后轴横向加速度
                 curr_steer,  # 车辆当前前轮转角
@@ -94,25 +102,57 @@ class EvalProcessor:
             ]]
         )
 
-        curr_xy = (observation["player"]["status"][0], observation["player"]["status"][1])  # 车辆后轴中心位置
-        npc_info_dict = {}
+        steer_masks = [True, True]
 
+        npc_info_dict = {}
         for npc_info in observation["npcs"]:
             if int(npc_info[0]) == 0:
                 continue
-            npc_info_dict[np.sqrt((npc_info[2] - curr_xy[0]) ** 2 + (npc_info[3] - curr_xy[1]) ** 2)] = [
-                npc_info[2] - curr_xy[0],  # dx
-                npc_info[3] - curr_xy[1],  # dy
-                npc_info[4],  # 障碍物朝向
-                npc_info[5],  # vx
-                npc_info[6],  # vy
-                # np.sqrt(npc_info[5] ** 2 + npc_info[6] ** 2) - observation["player"]["status"][3],  # 障碍物速度大小（标量） - 当前车速度大小
-                npc_info[7],  # ax
-                npc_info[8],  # ay
-                # np.sqrt(npc_info[7] ** 2 + npc_info[8] ** 2),  # 障碍物加速度大小（标量）
-                npc_info[9],  # 障碍物宽度
-                npc_info[10],  # 障碍物长度
+            npc_center = (npc_info[2], npc_info[3])
+            npc_width = npc_info[9]
+            npc_length = npc_info[10]
+            npc_theta = npc_info[4]
+
+            npc_polygon = get_polygon(
+                center=npc_center,
+                length=npc_length,
+                width=npc_width,
+                theta=npc_theta
+            )
+
+            safe_distance = car_polygon.distance(npc_polygon)
+
+            npc_x, npc_y = npc_polygon.exterior.xy
+            block_x_range = (min(npc_x), max(npc_x))
+            block_y_range = (min(npc_y), max(npc_y))
+
+            if block_x_range[0] < min(car_x) < block_x_range[1] or block_x_range[0] < max(car_x) < block_x_range[1]:  # 如果 car 和 npc 并排前行
+                if max(car_y) < block_y_range[0]:  # car 在 npc 的左侧
+                    if safe_distance < 0.3 and curr_yaw > 0:  # 小于安全距离并且车头仍朝右
+                        steer_masks[1] = False  # 右转屏蔽
+                elif min(car_y) > block_y_range[1]:  # car 在 npc 的右侧
+                    if safe_distance < 0.3 and curr_yaw < 0:  # 小于安全距离并且车头仍朝左
+                        steer_masks[0] = False  # 左转屏蔽
+
+            npc_dx = npc_x - np.array(curr_xy[0])
+            npc_dy = npc_y - np.array(curr_xy[1])
+
+            # 在观测值里将障碍物的位置、长宽、朝向角解析成四点的dx, dy
+            npc_info_dict[safe_distance] = [
+                safe_distance,
+                npc_dx[0],
+                npc_dx[1],
+                npc_dx[2],
+                npc_dx[3],
+                npc_dy[0],
+                npc_dy[1],
+                npc_dy[2],
+                npc_dy[3],
+                wrap_star(npc_info[4]),  # 障碍物朝向
+                np.sqrt(npc_info[5] ** 2 + npc_info[6] ** 2) - observation["player"]["status"][3],  # 障碍物速度大小（标量） - 当前车速度大小
+                np.sqrt(npc_info[7] ** 2 + npc_info[8] ** 2),  # 障碍物加速度大小（标量）
             ]
+
         if len(npc_info_dict) == 0:
             sur_obs_list = np.zeros((self.max_consider_nps, self.sur_dim))
             n_sur = 1
@@ -136,23 +176,30 @@ class EvalProcessor:
         ego_obs = np.array(list(self.n_ego_vec_deque))
 
         # action mask module
-        if (curr_velocity > speed_limit and prev_acc > 0) or (curr_velocity + prev_acc * 1 > speed_limit):
+        if curr_velocity > speed_limit and prev_acc > 0:
             # 如果【当前速度大于该条车道的限速】，并且【当前加速度大于零（车辆仍在加速状态）】
-            # 或者【按当前的加速度加速一秒后将会超过当前车道的限速，屏蔽继续加速的动作】
             acc_prime_mask = self.action_library[:, 1] < 0  # 速度太快，屏蔽继续加速的动作
-        elif (curr_velocity < speed_limit * 0.6 and prev_acc < 0) or (curr_velocity + prev_acc * 1 < speed_limit * 0.6):
+        elif curr_velocity < speed_limit * 0.6 and prev_acc < 0:
             # 如果【当前速度小于该条车道的限速的60%】，并且【当前加速度小于零（车辆仍在减速状态）】
-            # 或者【按当前的加速度加速一秒后将会低于当前车道的限速的60%，屏蔽继续减速的动作】
             acc_prime_mask = self.action_library[:, 1] > 0  # 速度太慢，屏蔽继续减速的动作
         else:
             acc_prime_mask = np.ones((len(self.action_library),), dtype=np.bool_)
-        if curr_steer < -pi / 36:  # 前轮左转大于5°，屏蔽继续左转的动作
-            steer_prime_mask = self.action_library[:, 0] > 0
-        elif curr_steer > pi / 36:  # 前轮右转大于5°，屏蔽继续右转的动作
+
+        if min(car_y) < 1:  # 车辆压左线
             steer_prime_mask = self.action_library[:, 0] < 0
+        elif max(car_y) > 1 + 3.75 * 3 > 0:  # 车辆压右线
+            steer_prime_mask = self.action_library[:, 0] > 0
         else:
             steer_prime_mask = np.ones((len(self.action_library),), dtype=np.bool_)
-        mask = acc_prime_mask & steer_prime_mask
+
+        if not steer_masks[0] and steer_masks[1]:  # 左侧有障碍物，车头仍朝左
+            lateral_steer_mask = self.action_library[:, 0] < 0
+        elif steer_masks[0] and not steer_masks[1]:  # 右侧有障碍物，车头仍朝右
+            lateral_steer_mask = self.action_library[:, 0] > 0
+        else:
+            lateral_steer_mask = np.ones((len(self.action_library),), dtype=np.bool_)
+
+        mask = acc_prime_mask & steer_prime_mask & lateral_steer_mask
 
         obs = dict(
             sur_obs=dict(
@@ -166,9 +213,9 @@ class EvalProcessor:
             mask=mask
         )
 
-        obs = Batch(obs=np.array([obs]), info={})
+        obs = np.array([obs])
 
-        return obs
+        return Batch(obs=obs, info={})
 
 
 class Processor:
