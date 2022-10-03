@@ -344,10 +344,10 @@ class Processor:
 
             if block_x_range[0] < min(car_x) < block_x_range[1] or block_x_range[0] < max(car_x) < block_x_range[1]:  # 如果 car 和 npc 并排前行
                 if max(car_y) < block_y_range[0]:  # car 在 npc 的左侧
-                    if safe_distance < 0.3 and curr_yaw > 0:  # 小于安全距离并且车头仍朝右
+                    if safe_distance < 0.82 and curr_yaw > 0:  # 小于安全距离并且车头仍朝右
                         steer_masks[1] = False  # 右转屏蔽
                 elif min(car_y) > block_y_range[1]:  # car 在 npc 的右侧
-                    if safe_distance < 0.3 and curr_yaw < 0:  # 小于安全距离并且车头仍朝左
+                    if safe_distance < 0.82 and curr_yaw < 0:  # 小于安全距离并且车头仍朝左
                         steer_masks[0] = False  # 左转屏蔽
 
             npc_dx = npc_x - np.array(curr_xy[0])
