@@ -122,6 +122,9 @@ class MyCollector(Collector):
         start_time = time.time()
 
         reach_goal_times = 0
+        time_out_times = 0
+        collided_times = 0
+
         step_count = 0
         episode_count = 0
         episode_rews = []
@@ -226,6 +229,10 @@ class MyCollector(Collector):
                 for _id in env_ind_global:
                     if self.data.info[_id]['reached_stoparea']:
                         reach_goal_times += 1
+                    if self.data.info[_id]['timeout']:
+                        time_out_times += 1
+                    if self.data.info[_id]['collided']:
+                        collided_times += 1
 
                 episode_count += len(env_ind_local)
                 episode_lens.append(ep_len[env_ind_local])
@@ -257,7 +264,7 @@ class MyCollector(Collector):
 
         if hasattr(self, 'train_logger'):
             self.train_logger.info(f'Collector collected: {episode_count} episodes with {step_count} transitions\tCost:{round(max(time.time() - start_time, 1e-9), 2)}s')
-            self.train_logger.info(f'Reach goal rate: {reach_goal_times}/{episode_count}')
+            self.train_logger.info(f'ReachGoal: {reach_goal_times}/{episode_count}, Collided: {collided_times}/{episode_count}, TimeOut: {time_out_times}/{episode_count}.')
 
         return {
             "n/ep": episode_count,
