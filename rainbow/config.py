@@ -32,7 +32,7 @@ config = dict(
 
     noisy_std=0.15,
     n_step=5,  # the number of steps to look ahead. Default to 1.
-    target_update_freq=1e4,  # 3e4
+    target_update_freq=2e4,  # 3e4
 
     epoch=1e7,
     step_per_epoch=3e4,  # the number of transitions collected per epoch
@@ -94,6 +94,7 @@ config = dict(
     ),
 
     dangerous_distance=1,
+    dangerous_time=5,
 
 )
 

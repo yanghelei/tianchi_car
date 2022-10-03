@@ -506,7 +506,12 @@ class Processor:
         # else:
         #     keep_line_ratio = 0
 
-        npc_reward = self.get_npc_rewards(car_polygon, next_obs["npcs"])
+        car_info = {
+            'speed': car_speed,
+            'polygon': car_polygon
+        }
+
+        npc_reward = self.get_npc_rewards(car_info, next_obs["npcs"])
 
         rule_reward = 0
         if outside_danger:
@@ -528,8 +533,12 @@ class Processor:
 
         return end_reward + rule_reward + npc_reward
 
-    def get_npc_rewards(self, car_polygon, npc_infos):
-        # car_x, car_y = car_polygon.exterior.xy
+    def get_npc_rewards(self, car_info, npc_infos):
+
+        car_speed = car_info['speed']
+        car_polygon = car_info['polygon']
+
+        car_x, car_y = car_polygon.exterior.xy
 
         reward = 0
         for npc_info in npc_infos:
@@ -539,6 +548,7 @@ class Processor:
             npc_width = npc_info[9]
             npc_length = npc_info[10]
             npc_theta = npc_info[4]
+            npc_speed = npc_info[5]
 
             npc_polygon = get_polygon(
                 center=npc_center,
@@ -546,9 +556,21 @@ class Processor:
                 width=npc_width,
                 theta=npc_theta
             )
+            npc_x, npc_y = npc_polygon.exterior.xy
+
+            block = False
+            if max(npc_x) < min(car_x):  # 该 npc 在车的前方
+                block_range = (min(npc_y), max(npc_y))  # 该 npc 的车道占据范围
+                if (block_range[0] < min(car_y) < block_range[1]) or (block_range[0] < max(car_y) < block_range[1]):
+                    block = True  # 障碍物在车辆的前方
 
             safe_distance = car_polygon.distance(npc_polygon)
 
+            dv = car_speed - npc_speed
+            if block and dv > 0:
+                safe_t = safe_distance / dv
+                if safe_t < self.cfgs.dangerous_time:
+                    reward -= 100 * (self.cfgs.dangerous_time - safe_t) / (self.cfgs.dangerous_time + safe_t)
             if safe_distance < self.cfgs.dangerous_distance:
                 reward -= 1000 * (self.cfgs.dangerous_distance - safe_distance) / (self.cfgs.dangerous_distance + safe_distance)
 
