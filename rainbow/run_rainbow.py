@@ -129,7 +129,7 @@ def train(cfgs):
             }, ckpt_path
         )
         buffer_path = os.path.join(log_path, "train_buffer.pkl")
-        pickle.dump(train_collector.buffer, open(buffer_path, "wb"))
+        pickle.dump(train_collector.buffer, open(buffer_path, "wb"), protocol=4)
         return ckpt_path
 
     if cfgs.resume_model:
@@ -158,7 +158,7 @@ def train(cfgs):
         train_collector.collect(n_step=warm_up, random=True)
         tianchi_logger.info(f"------------Warmup Collect {warm_up} transitions------------")
         buffer_path = os.path.join(log_path, "train_buffer.pkl")
-        pickle.dump(train_collector.buffer, open(buffer_path, "wb"))
+        pickle.dump(train_collector.buffer, open(buffer_path, "wb"), protocol=4)
     else:
         tianchi_logger.info(f"------------Buffer has {len(train_collector.buffer)} transitions------------")
 
