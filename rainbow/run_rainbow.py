@@ -113,12 +113,10 @@ def train(cfgs):
         tianchi_logger.info(f"Current eps is: {eps}.")
         # beta annealing, just a demo
         if cfgs.prioritized_replay:
-            if env_step <= 10000:
-                beta = cfgs.beta
-            elif env_step <= 50000:
-                beta = cfgs.beta - (env_step - 10000) / 40000 * (cfgs.beta - cfgs.beta_final)
-            else:
+            if env_step >= cfgs.beta_decay:
                 beta = cfgs.beta_final
+            else:
+                beta = (cfgs.beta - cfgs.beta_final) * (1 - env_step / cfgs.beta_decay) + cfgs.beta_final
             buf.set_beta(beta)
 
     def save_checkpoint_fn(epoch, env_step, gradient_step):
@@ -134,7 +132,7 @@ def train(cfgs):
         pickle.dump(train_collector.buffer, open(buffer_path, "wb"))
         return ckpt_path
 
-    if cfgs.resume:
+    if cfgs.resume_model:
         # load from existing checkpoint
         logger.logger.info(f"Loading agent under {log_path}")
         ckpt_path = os.path.join(log_path, "checkpoint.pth")
@@ -147,13 +145,13 @@ def train(cfgs):
         else:
             logger.logger.info("Fail to restore policy and optim.")
 
-        if cfgs.resume_buffer:
-            buffer_path = os.path.join(log_path, "train_buffer.pkl")
-            if os.path.exists(buffer_path):
-                train_collector.buffer = pickle.load(open(buffer_path, "rb"))
-                logger.logger.info("Successfully restore buffer.")
-            else:
-                logger.logger.info("Fail to restore buffer.")
+    if cfgs.resume_buffer:
+        buffer_path = os.path.join(log_path, "train_buffer.pkl")
+        if os.path.exists(buffer_path):
+            train_collector.buffer = pickle.load(open(buffer_path, "rb"))
+            logger.logger.info("Successfully restore buffer.")
+        else:
+            logger.logger.info("Fail to restore buffer.")
 
     if len(train_collector.buffer) == 0:
         warm_up = int(cfgs.batch_size * cfgs.training_num)
@@ -181,7 +179,7 @@ def train(cfgs):
         save_best_fn=None,
         logger=logger,
         show_progress=False,
-        resume_from_log=cfgs.resume,
+        resume_from_log=cfgs.resume_log,
         save_checkpoint_fn=save_checkpoint_fn,
     )
 

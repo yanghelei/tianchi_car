@@ -16,12 +16,12 @@ config = dict(
         type='exp',
         start=0.95,
         end=0.05,
-        decay=5e5
+        decay=1e6
     ),
     # eps_train=0.1,
     eps_test=0.01,
 
-    buffer_size=1e6,
+    buffer_size=3e6,
 
     lr=1e-4,
     gamma=0.99,
@@ -30,9 +30,9 @@ config = dict(
     v_min=-10.0,
     v_max=10.0,
 
-    noisy_std=0.15,
+    noisy_std=0.5,
     n_step=5,  # the number of steps to look ahead. Default to 1.
-    target_update_freq=2e4,  # 3e4
+    target_update_freq=1e4,  # 3e4
 
     epoch=1e7,
     step_per_epoch=3e4,  # the number of transitions collected per epoch
@@ -55,9 +55,12 @@ config = dict(
     alpha=0.6,
     beta=0.4,
     beta_final=1.0,
+    beta_decay=3e6,
 
-    resume=True,
-    resume_buffer=True,
+    resume_log=False,
+    resume_model=True,
+    resume_buffer=False,
+
     save_interval=1,
 
     device='cuda' if torch.cuda.is_available() else 'cpu',
