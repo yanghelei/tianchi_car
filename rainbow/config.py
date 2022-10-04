@@ -15,8 +15,8 @@ config = dict(
     exploration=dict(
         type='exp',
         start=0.95,
-        end=0.05,
-        decay=1e6
+        end=0.10,
+        decay=5e5
     ),
     # eps_train=0.1,
     eps_test=0.01,
@@ -57,9 +57,9 @@ config = dict(
     beta_final=1.0,
     beta_decay=3e6,
 
-    resume_log=False,
+    resume_log=True,
     resume_model=True,
-    resume_buffer=False,
+    resume_buffer=True,
 
     save_interval=1,
 
