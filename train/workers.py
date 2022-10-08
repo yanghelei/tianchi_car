@@ -175,7 +175,7 @@ class EnvWorker(mp.Process):
                         vec_state, env_state = self.env_post_processer.reset(obs)
                         while Get_Enough_Batch.value == 0:
                             with torch.no_grad():
-                                action, gaussian_action, logproba, value = policy.select_action(env_state, vec_state, False)
+                                action, gaussian_action, logproba, value = policy.select_action(env_state, vec_state, True)
                                 env_state = env_state.data.cpu().numpy()[0]
                                 vec_state = vec_state.data.cpu().numpy()[0]
                             # 映射到环境动作

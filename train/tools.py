@@ -244,8 +244,8 @@ class EnvPostProcsser:
         last_acc_y = self.last_obs["player"]["status"][6]
         last_acc_x = self.last_obs["player"]['status'][5]
 
-        acc_y_dealta = acc_y - last_acc_y
-        acc_x_dealta = acc_x - last_acc_x
+        acc_y_dealta = (acc_y - last_acc_y) / self.args.dt
+        acc_x_dealta = (acc_x - last_acc_x) / self.args.dt
 
         acc_prime_reward = 0 
         acc_reward = 0
@@ -273,9 +273,9 @@ class EnvPostProcsser:
             speed_reward += -(speed - speed_limit)*0.1
 
         # add penalty when offset is too large (lane width 3.75)
-        if current_lane_index == 2:
-            if np.abs(current_offset) > 0.5:
-                offset_reward += -(np.abs(current_offset)-0.5)*1
+        # if current_lane_index == 2:
+        if np.abs(current_offset) > 0.5:
+            offset_reward += -(np.abs(current_offset)-0.5)*1
 
         rule_reward = speed_reward + acc_reward + acc_prime_reward + offset_reward
 

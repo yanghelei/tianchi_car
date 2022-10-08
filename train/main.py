@@ -3,6 +3,7 @@
 # * Unauthorized copying of this file, via any medium is strictly prohibited
 # *****************************************************************************
 
+from collections import deque
 import faulthandler
 import os
 import time
@@ -71,7 +72,12 @@ class MulProPPO:
         else:
             self.warmup_episode = self.start_episode + self.params.warmup_episode
         self.start_time = time.time()
-        
+        self.reward_deque = deque(maxlen=10)
+        self.base_reward_deque = deque(maxlen=10)
+        self.rule_reward_deque = deque(maxlen=10)
+        self.collide_reward_deque = deque(maxlen=10)
+        self.reach_rate_deque = deque(maxlen=10)
+
     def _make_dir(self):
         current_dir = os.path.abspath(".")
         self.exp_dir = current_dir + "/results/exp/"
@@ -253,6 +259,7 @@ class MulProPPO:
                 if self.params.use_target_kl:
                     if approx_kl > 1.5*self.params.target_kl:
                         self.logger.info(f'Episode:{episode} Early stopping at epoch {i_epoch} due to reaching max kl.')
+                        break
                 # update lr 
                 for pg in self.optimizer.param_groups:
                     pg["lr"] = self.lr
@@ -283,6 +290,12 @@ class MulProPPO:
         mean_rule_reward = (np.sum(rule_rewards) / memory.num_episode)
         mean_step = len(memory) // memory.num_episode
         reach_goal_rate = memory.arrive_goal_num / memory.num_episode
+
+        self.reward_deque.append(mean_reward)
+        self.rule_reward_deque.append(mean_rule_reward)
+        self.base_reward_deque.append(mean_base_reward)
+        self.collide_reward_deque.append(mean_collide_reward)
+        self.reach_rate_deque.append(reach_goal_rate)
 
         self.logger.info("Finished iteration: " + str(episode))
         self.logger.info("reach goal rate: " + str(reach_goal_rate))
@@ -346,12 +359,13 @@ class MulProPPO:
         self.logger.info(
             "lr: " + str(round(self.lr, 5)) + ' clip: '+ str(round(self.clip, 5)) + ' entropy: '+str(round(self.beta, 5)))
         self.logger.info('balance:' + str(round(self.balance, 5)))
-        self.logger.info('loss_ratio' + str(round(self.loss_ratio, 5)))
-        self.writer.scalar_summary("reward", mean_reward, episode)
-        self.writer.scalar_summary('base_reward', mean_base_reward, episode)
-        self.writer.scalar_summary('collide_reward', mean_collide_reward, episode)
-        self.writer.scalar_summary('rule_reward', mean_rule_reward, episode)
-        self.writer.scalar_summary("reach_goal_rate", reach_goal_rate, episode)
+        if self.params.use_loss_balance:
+            self.logger.info('loss_ratio' + str(round(self.loss_ratio, 5)))
+        self.writer.scalar_summary("reward", np.mean(self.reward_deque), episode)
+        self.writer.scalar_summary('base_reward', np.mean(self.base_reward_deque), episode)
+        self.writer.scalar_summary('collide_reward', np.mean(self.collide_reward_deque), episode)
+        self.writer.scalar_summary('rule_reward', np.mean(self.rule_reward_deque), episode)
+        self.writer.scalar_summary("reach_goal_rate", np.mean(self.reach_rate_deque), episode)
         self.writer.scalar_summary('pi_loss', loss_surr, episode)
         self.writer.scalar_summary('value_loss', loss_value, episode)
         self.writer.scalar_summary('entropy_loss', loss_entropy, episode)
@@ -384,7 +398,7 @@ class MulProPPO:
             # update policy
             success_info = None
             failed_info = None 
-            if success_batch_size > 0 and failed_batch_size > 0:
+            if success_batch_size > 0 and failed_batch_size > 0 and self.params.use_loss_balance:
                 success_info = self.update(success_batch, i_episode, success_batch_size, loss_coef=self.loss_ratio)
                 failed_info = self.update(failed_batch, i_episode, failed_batch_size, loss_coef=1-self.loss_ratio)
                 info = {}

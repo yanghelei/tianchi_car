@@ -43,13 +43,14 @@ class PolicyParam():
         log_num_episode: int = 10
 
     # trick use    
-    use_target_kl: bool = False
+    use_target_kl: bool = True
     use_advantage_norm: bool = True
     use_clipped_value_loss: bool = True
     use_value_norm: bool = True
     use_clip_grad: bool = True
     share: bool = True
     independent_std: bool = True
+    use_loss_balance: bool = False
 
     # params
     gamma: float = 0.99
@@ -67,9 +68,9 @@ class PolicyParam():
             }
     beta_schedule={
             "initial": 0.01,
-            "final": 0.005,
+            "final": 0.001,
             "power": 1.0,
-            "max_decay_steps": 10000
+            "max_decay_steps": 20000
             }
     clip_range_schedule={
         "initial": 0.2,
@@ -80,9 +81,9 @@ class PolicyParam():
     # testing yet
     balance_schedule={
         "initial": 0.1,
-        "final": 1,
+        "final": 2,
         "power": 1.0,
-        "max_decay_steps": 10000
+        "max_decay_steps": 20000
         }
     loss_ratio_schedule = {
         'initial':0.5,
