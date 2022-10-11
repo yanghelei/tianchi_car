@@ -26,7 +26,7 @@ class PolicyParam():
         num_workers = 1
         warmup_episode = 0
         num_episode = 20
-        num_epoch = 3
+        num_epoch = 10
         save_num_episode = 1
         eval_episode: int = 1
         eval_interval: int = 1
@@ -95,9 +95,9 @@ class PolicyParam():
 
     reload = False
     if gaussian:
-        model_path: str = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'gaussian_ppo')
+        model_path: str = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'gaussian_ppo') 
     else:
-        model_path: str = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'categorical_ppo')
+        model_path: str = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'categorical_ppo') # train加载位置
     obs_type: str = "vec"
     img_width: int = 224
     img_length: int = 224
@@ -113,8 +113,8 @@ class PolicyParam():
 class CommonConfig:
 
     if PolicyParam.gaussian:
-        remote_path: str = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'gaussian_ppo')
+        remote_path: str = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'gaussian_ppo') 
     else:
-        remote_path = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'categorical_ppo')
+        remote_path = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'categorical_ppo_fix') # train保存位置 inference加载位置
     env_action_space = Box(low=np.array([-0.13, -0.7]), high=np.array([0.13, 0.7]), dtype=np.float32)
     action_num = 121

@@ -237,12 +237,12 @@ class EnvPostProcsser:
         if info['collided']:
             collide_reward -= 10 
 
-        speed = observation["player"]["status"][4]
-        acc_y = observation["player"]["status"][6]
-        acc_x = observation["player"]["status"][5]
+        speed = observation["player"]["status"][3]
+        acc_y = observation["player"]["status"][5]
+        acc_x = observation["player"]["status"][4]
 
-        last_acc_y = self.last_obs["player"]["status"][6]
-        last_acc_x = self.last_obs["player"]['status'][5]
+        last_acc_y = self.last_obs["player"]["status"][5]
+        last_acc_x = self.last_obs["player"]['status'][4]
 
         acc_y_dealta = (acc_y - last_acc_y) / self.args.dt
         acc_x_dealta = (acc_x - last_acc_x) / self.args.dt

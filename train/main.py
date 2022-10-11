@@ -300,6 +300,8 @@ class MulProPPO:
         self.logger.info("Finished iteration: " + str(episode))
         self.logger.info("reach goal rate: " + str(reach_goal_rate))
         self.logger.info("reward: " + str(round(mean_reward,2)))
+        self.logger.info("base_reward:" + str(round(mean_base_reward, 2)))
+        self.logger.info('rule_reward:' + str(round(mean_rule_reward, 2)))
         self.logger.info(
             "total loss: "
             + str(round(total_loss, 3))
