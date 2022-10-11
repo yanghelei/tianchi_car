@@ -33,7 +33,7 @@ class PolicyParam():
         log_num_episode: int = 1
     else:
         use_eval = True
-        num_workers: int = 3
+        num_workers: int = 15
         warmup_episode: int = 10
         num_episode: int = 1200
         num_epoch: int = 3
