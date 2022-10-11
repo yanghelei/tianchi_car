@@ -93,7 +93,6 @@ class Feature_Net(nn.Module):
         return env_feature
 
 
-
 class PPOPolicy(nn.Module):
     def __init__(self, num_outputs):
         nn.Module.__init__(self)
@@ -310,17 +309,19 @@ class CategoricalPPOPolicy(nn.Module):
         self.ego_obs_norm.update(ego_obs)
     
     @torch.no_grad()
-    def select_action(self, sur_obs, ego_obs, deterministic=False):
+    def select_action(self, sur_obs, ego_obs, deterministic=False, available_actions=None):
 
         # 归一化
         env_feature = self.get_env_feature(sur_obs, ego_obs)
+        
         if type(env_feature) == dict:
             action_out = self.actor_net(env_feature['actor_env_feature'])
             value = self.critic_net(env_feature['critic_env_feature'])
         else:
             action_out = self.actor_net(env_feature)
             value = self.critic_net(env_feature)
-            
+        if available_actions is not None:
+            action_out[available_actions == 0] = -1e10
         action_distribution = Categorical(logits=action_out)
         # 采样
         if not deterministic:
@@ -332,14 +333,18 @@ class CategoricalPPOPolicy(nn.Module):
 
         return action.cpu().numpy()[0], np.zeros(1), logproba.cpu().numpy()[0], value.cpu().numpy()[0]
 
-    def eval(self, env_feature, actions):
+    def eval(self, env_feature, actions, available_actions=None):
 
         if type(env_feature) == dict:
             action_out = self.actor_net(env_feature['actor_env_feature'])
         else:
             action_out = self.actor_net(env_feature)
+        
+        if available_actions is not None:
+            action_out[available_actions == 0] = -1e10
             
         action_distribution = Categorical(logits=action_out)
+        
         logp_pi = action_distribution.log_prob(actions.view(-1))
         entropy = action_distribution.entropy().mean()
 
