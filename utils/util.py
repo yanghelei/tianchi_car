@@ -65,6 +65,14 @@ def check(input):
     output = torch.from_numpy(input) if type(input) == np.ndarray else input
     return output
 
+def huber_loss(e, d):
+    a = (abs(e) <= d).float()
+    b = (e > d).float()
+    return a * e ** 2 / 2 + b * d * (abs(e) - d / 2)
+
+def mse_loss(e):
+    return e ** 2 / 2
+
 class TanhBijector:
     """
     Bijective transformation of a probability distribution

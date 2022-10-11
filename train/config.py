@@ -33,7 +33,7 @@ class PolicyParam():
         log_num_episode: int = 1
     else:
         use_eval = True
-        num_workers: int = 15
+        num_workers: int = 3
         warmup_episode: int = 10
         num_episode: int = 1200
         num_epoch: int = 3
@@ -52,6 +52,8 @@ class PolicyParam():
     independent_std: bool = True
     use_loss_balance: bool = False
 
+    use_huber_loss: bool = True
+
     # params
     gamma: float = 0.99
     lamda: float = 0.95
@@ -59,6 +61,9 @@ class PolicyParam():
     max_grad_norm: float = 0.5
     vf_clip_param: float = 0.5
     target_kl = 0.03 
+
+    huber_delta = 10.0
+    
     # schedule
     learning_rate_schedule={
             "initial": 1e-4,

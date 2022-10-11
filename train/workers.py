@@ -22,7 +22,7 @@ from copy import deepcopy
 
 Transition = namedtuple(
     "Transition",
-    ("sur_obs", "vec_obs", "value", "action", 'gaussian_action', "logproba", "mask", "reward", "base_reward", "collide_reward", "rule_reward", "info",),
+    ("sur_obs", "vec_obs", "value", "action", 'gaussian_action', "logproba", "mask", "reward", "base_reward", "collide_reward", "rule_reward", "available_actions", "info"),
 )
 Get_Enough_Batch = mp.Value("i", 0) # 标志位：是否采集了足够的样本数
 
@@ -81,12 +81,14 @@ class EnvWorker(mp.Process):
         self.queue = queue
         self.lock = lock
         self.gaussian = PolicyParam.gaussian
-        self.env_post_processer = EnvPostProcsser(stage)
         self.env_action_space = CommonConfig.env_action_space
         self.action_num =  CommonConfig.action_num
         self.action_repeat = PolicyParam.action_repeat
         if not self.gaussian:
             self.actions_map = self._set_actions_map(self.action_num)
+        
+        self.env_post_processer = EnvPostProcsser(stage, self.actions_map)
+
         torch.manual_seed(seed)
         np.random.seed(seed)
     
@@ -124,12 +126,13 @@ class EnvWorker(mp.Process):
                     try:
                         episode = Episode()
                         obs = self.env.reset()
-                        vec_state, env_state = self.env_post_processer.reset(obs)
+                        vec_state, env_state, available_actions = self.env_post_processer.reset(obs)
                         while Get_Enough_Batch.value == 0:
                             with torch.no_grad():
-                                action, gaussian_action, logproba, value = policy.select_action(env_state, vec_state)
+                                action, gaussian_action, logproba, value = policy.select_action(env_state, vec_state, available_actions=available_actions)
                                 env_state = env_state.data.cpu().numpy()[0]
                                 vec_state = vec_state.data.cpu().numpy()[0]
+                                available_actions = available_actions.data.cpu().numpy()[0]
                             # 映射到环境动作
                             if self.gaussian:
                                 env_action = self.action_transform(gaussian_action)
@@ -149,13 +152,14 @@ class EnvWorker(mp.Process):
                             if not done:
                                 new_env_state = self.env_post_processer.assemble_surr_vec_obs(obs)
                                 new_vec_state = self.env_post_processer.assemble_ego_vec_obs(obs)
+                                new_available_actions = self.env_post_processer.get_available_actions(obs)  # TODO: available actions
                             reward, reward_dict = self.env_post_processer.assemble_reward(obs, info, balance)
                             base_reward = reward_dict['base_reward']
                             collide_reward = reward_dict['collide_reward']
                             rule_reward = reward_dict['rule_reward']
                             mask = 0 if done else 1
                             episode.push(
-                                env_state, vec_state, value, action, gaussian_action, logproba, mask, reward, base_reward, collide_reward, rule_reward, info,
+                                env_state, vec_state, value, action, gaussian_action, logproba, mask, reward, base_reward, collide_reward, rule_reward, available_actions, info
                             )
                             if done:
                                 with self.lock:
@@ -163,6 +167,7 @@ class EnvWorker(mp.Process):
                                 break
                             env_state = new_env_state
                             vec_state = new_vec_state
+                            available_actions = new_available_actions
                     except Exception as e:
                         logger.error(f"exception: {traceback.print_exc()}")
 

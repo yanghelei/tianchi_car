@@ -29,8 +29,10 @@ def file_name(file_dir, file_type):
     return L
 
 class EnvPostProcsser:
-    def __init__(self, stage) -> None:
+    def __init__(self, stage, actions_map) -> None:
         self.args = PolicyParam
+
+        self.actions_map = actions_map
 
         self.target_speed = self.args.target_speed
         self.dt = self.args.dt
@@ -235,7 +237,7 @@ class EnvPostProcsser:
                 safe_t = safe_distance / dv
                 if safe_t < 3:  # 5秒的安全时间
                     safe_ratio_list.append(safe_t / 3.0)
-            if safe_distance < self.cfgs.dangerous_distance:
+            if safe_distance < 0.75:
                 safe_ratio_list.append(0.0)
         safe_ratio = min(safe_ratio_list)
         
@@ -306,6 +308,70 @@ class EnvPostProcsser:
         info = dict(base_reward=base_reward, collide_reward=0, rule_reward=rule_reward)
 
         return total_reward, info
+    
+    def get_available_actions(self, observation):
+        
+        actions = np.array(list(self.actions_map.values()))
+
+        curr_xy = (observation["player"]["status"][0], observation["player"]["status"][1])  # 当前车辆位置
+
+        car_polygon = get_polygon(
+            center=curr_xy,
+            length=observation["player"]['property'][1],  # 车辆长度
+            width=observation["player"]['property'][0],  # 车辆宽度
+            theta=observation["player"]["status"][2]  # 车辆朝向角
+        )
+
+        car_x, car_y = car_polygon.exterior.xy
+
+        steer_masks = [True, True]
+
+        for npc_info in observation["npcs"]:
+            if int(npc_info[0]) == 0:
+                continue
+            npc_center = (npc_info[2], npc_info[3])
+            npc_width = npc_info[9]
+            npc_length = npc_info[10]
+            npc_theta = npc_info[4]
+
+            npc_polygon = get_polygon(
+                center=npc_center,
+                length=npc_length,
+                width=npc_width,
+                theta=npc_theta
+            )
+
+            safe_distance = car_polygon.distance(npc_polygon)
+
+            npc_x, npc_y = npc_polygon.exterior.xy
+            block_x_range = (min(npc_x), max(npc_x))
+            block_y_range = (min(npc_y), max(npc_y))
+
+            if block_x_range[0] < min(car_x) < block_x_range[1] or block_x_range[0] < max(car_x) < block_x_range[1]:  # 如果 car 和 npc 并排前行
+                if min(car_y) < block_y_range[0]:  # car 在 npc 的左侧
+                    if safe_distance < 0.82 and observation["player"]["status"][2] > 0:  # 小于安全距离并且车头仍朝右
+                        steer_masks[1] = False  # 右转屏蔽
+                elif max(car_y) > block_y_range[1]:  # car 在 npc 的右侧
+                    if safe_distance < 0.82 and observation["player"]["status"][2] < 0:  # 小于安全距离并且车头仍朝左
+                        steer_masks[0] = False  # 左转屏蔽
+        
+        if min(car_y) < 1:  # 车辆压左线
+            steer_line_mask = actions[:, 0] < 0
+        elif max(car_y) > 1 + 3.75 * 3:  # 车辆压右线
+            steer_line_mask = actions[:, 0] > 0
+        else:
+            steer_line_mask = np.ones((len(self.actions_map),), dtype=np.bool_)
+
+        if not steer_masks[0] and steer_masks[1]:  # 左侧有障碍物，车头仍朝左
+            lateral_steer_mask = actions[:, 0] < 0
+        elif steer_masks[0] and not steer_masks[1]:  # 右侧有障碍物，车头仍朝右
+            lateral_steer_mask = actions[:, 0] > 0
+        else:
+            lateral_steer_mask = np.ones((len(self.actions_map),), dtype=np.bool_)
+
+        mask = steer_line_mask & lateral_steer_mask
+
+        return torch.from_numpy(mask).unsqueeze(0)
 
     def reset(self, initial_obs):
         self.prev_distance = None
@@ -325,4 +391,5 @@ class EnvPostProcsser:
             self.surr_vec_deque.append(sur_vec_state)
         ego_vec_state = torch.from_numpy(numpy.array(list(self.vec_deque))).unsqueeze(0) # [1,5,8]
         sur_vec_state = torch.from_numpy(numpy.array(list(self.surr_vec_deque))).unsqueeze(0) # [1,5,8]
-        return ego_vec_state, sur_vec_state
+        available_actions = self.get_available_actions(initial_obs)
+        return ego_vec_state, sur_vec_state, available_actions
