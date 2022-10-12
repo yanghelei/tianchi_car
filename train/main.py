@@ -379,7 +379,12 @@ class MulProPPO:
         nc.task_complete_notice(task_name="Training", task_progree=f"training Started {self.task_name}.")
 
         for i_episode in range(self.start_episode, self.num_episode):
-
+            self.balance = polynomial_increase(self.balance_schedule["initial"], 
+                                               self.balance_schedule["final"], 
+                                               self.balance_schedule["max_increase_steps"], 
+                                               self.balance_schedule["power"], 
+                                               i_episode, 
+                                               self.balance_schedule["start_increase_steps"])
             success_memory, failed_memory = self.sampler.sample(self.model, self.balance)
             total_memory = success_memory + failed_memory
             success_batch_size = len(success_memory)
@@ -395,7 +400,7 @@ class MulProPPO:
             self.lr = polynomial_decay(self.lr_schedule["initial"], self.lr_schedule["final"], self.lr_schedule["max_decay_steps"], self.lr_schedule["power"], i_episode)
             self.beta = polynomial_decay(self.beta_schedule["initial"], self.beta_schedule["final"], self.beta_schedule["max_decay_steps"], self.beta_schedule["power"], i_episode)
             self.clip = polynomial_decay(self.cr_schedule["initial"], self.cr_schedule["final"], self.cr_schedule["max_decay_steps"], self.cr_schedule["power"], i_episode)
-            self.balance = polynomial_increase(self.balance_schedule["initial"], self.balance_schedule["final"], self.balance_schedule["max_decay_steps"], self.balance_schedule["power"], i_episode)
+            # self.balance = polynomial_increase(self.balance_schedule["initial"], self.balance_schedule["final"], self.balance_schedule["max_decay_steps"], self.balance_schedule["power"], i_episode)
             self.loss_ratio = polynomial_decay(self.loss_ratio_schedule["initial"], self.loss_ratio_schedule["final"], self.loss_ratio_schedule["max_decay_steps"], self.loss_ratio_schedule["power"], i_episode)
             # update policy
             success_info = None
@@ -417,9 +422,12 @@ class MulProPPO:
                 self.log(total_memory, total_batch.reward, total_batch.base_reward, total_batch.collide_reward, total_batch.rule_reward, info, i_episode, success_info=success_info, failed_info=failed_info)
                 
             if (i_episode % self.params.eval_interval == 0 or i_episode == (self.num_episode-1)) and self.params.use_eval:
-                memory = self.sampler.eval(self.model, self.params.eval_episode)
+                memory = self.sampler.eval(self.model, self.params.eval_episode, self.balance)
                 batch = memory.sample()
                 mean_reward = np.sum(batch.reward) / memory.num_episode
+                mean_rule_reward = np.sum(batch.rule_reward) / memory.num_episode
+                mean_base_reward = np.sum(batch.base_reward) / memory.num_episode
+                mean_collide_reward = np.sum(batch.collide_reward) / memory.num_episode
                 mean_step = len(memory) // memory.num_episode
                 reach_goal_rate = memory.arrive_goal_num / memory.num_episode
                 if self.best_reach_rate < reach_goal_rate:
@@ -432,6 +440,9 @@ class MulProPPO:
                 self.logger.info("Mean Step: " + str(mean_step))
                 self.logger.info("Success Rate: " + str(reach_goal_rate))
                 self.logger.info('Mean Reward:' + str(mean_reward))
+                self.logger.info('Mean Base Reward:' + str(mean_base_reward))
+                self.logger.info('Mean Rule Reward:' + str(mean_rule_reward))
+                self.logger.info('Mean Collide Reward:' + str(mean_collide_reward))
                 self.logger.info('Best Reach_Rate:' + str(self.best_reach_rate))
                 self.writer.scalar_summary('Eval Successs Rate', reach_goal_rate, i_episode)
                 self.writer.scalar_summary('Eval Mean Reward', mean_reward, i_episode)

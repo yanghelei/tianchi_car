@@ -25,7 +25,7 @@ def polynomial_decay(initial:float, final:float, max_decay_steps:int, power:floa
     else:
         return  ((initial - final) * ((1 - current_step / max_decay_steps) ** power) + final)
 
-def polynomial_increase(initial:float, final:float, max_increase_steps:int, power:float, current_step:int) -> float:
+def polynomial_increase(initial:float, final:float, max_increase_steps:int, power:float, current_step:int, start_step:int) -> float:
     """increase hyperparameters polynomially. If power is set to 1.0, the decay behaves linearly. 
 
     Args:
@@ -43,7 +43,7 @@ def polynomial_increase(initial:float, final:float, max_increase_steps:int, powe
         return final
     # Return the polynomially decayed value given the current step
     else:
-        return  ((initial - final) * ((1 - current_step / max_increase_steps) ** power) + final)
+        return  ((initial - final) * ((1 - (current_step - start_step) / (max_increase_steps-start_step)) ** power) + final)
 
 
 def init(module, weight_init, bias_init, gain=1):

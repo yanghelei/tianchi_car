@@ -68,9 +68,9 @@ class PolicyParam():
             }
     beta_schedule={
             "initial": 0.01,
-            "final": 0.001,
+            "final": 0.005,
             "power": 1.0,
-            "max_decay_steps": 20000
+            "max_decay_steps": 10000
             }
     clip_range_schedule={
         "initial": 0.2,
@@ -80,10 +80,11 @@ class PolicyParam():
         }
     # testing yet
     balance_schedule={
-        "initial": 0.1,
-        "final": 2,
+        "initial": 0.5,
+        "final": 1,
         "power": 1.0,
-        "max_decay_steps": 20000
+        "max_increase_steps": 150000,
+        "start_increase_steps": 10000,
         }
     loss_ratio_schedule = {
         'initial':0.5,
@@ -115,6 +116,6 @@ class CommonConfig:
     if PolicyParam.gaussian:
         remote_path: str = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'gaussian_ppo') 
     else:
-        remote_path = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'categorical_ppo_fix') # train保存位置 inference加载位置
+        remote_path = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'categorical_ppo') # train保存位置 inference加载位置
     env_action_space = Box(low=np.array([-0.13, -0.7]), high=np.array([0.13, 0.7]), dtype=np.float32)
     action_num = 121
