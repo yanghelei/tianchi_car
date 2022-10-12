@@ -323,9 +323,12 @@ class EnvPostProcsser:
         )
 
         car_x, car_y = car_polygon.exterior.xy
+        car_speed = observation['player']['status'][3]
 
         steer_masks = [True, True]
 
+        safe_dt = [np.inf]
+        
         for npc_info in observation["npcs"]:
             if int(npc_info[0]) == 0:
                 continue
@@ -333,6 +336,7 @@ class EnvPostProcsser:
             npc_width = npc_info[9]
             npc_length = npc_info[10]
             npc_theta = npc_info[4]
+            npc_speed = npc_info[5]
 
             npc_polygon = get_polygon(
                 center=npc_center,
@@ -354,6 +358,25 @@ class EnvPostProcsser:
                 elif max(car_y) > block_y_range[1]:  # car 在 npc 的右侧
                     if safe_distance < 0.82 and observation["player"]["status"][2] < 0:  # 小于安全距离并且车头仍朝左
                         steer_masks[0] = False  # 左转屏蔽
+            
+            block = False
+            if max(npc_x) < min(car_x):  # 该 npc 在车的前方
+                block_range = (min(npc_y), max(npc_y))  # 该 npc 的车道占据范围
+                if (block_range[0] < min(car_y) < block_range[1]) or (block_range[0] < max(car_y) < block_range[1]):
+                    block = True  # 障碍物在车辆的前方
+            if not block:
+                continue
+
+            dv = car_speed - npc_speed
+            if block and dv > 0:
+                safe_dt.append(safe_distance/ dv)
+        
+        if min(safe_dt) < 1:
+            acc_mask = actions[:, 1] == -0.7
+        elif 1 < min(safe_dt) < 5:
+            acc_mask = actions[:, 1] < 0
+        else:
+            acc_mask = np.ones((len(self.actions_map),), dtype=np.bool_)
         
         if min(car_y) < 1:  # 车辆压左线
             steer_line_mask = actions[:, 0] < 0
@@ -369,7 +392,7 @@ class EnvPostProcsser:
         else:
             lateral_steer_mask = np.ones((len(self.actions_map),), dtype=np.bool_)
 
-        mask = steer_line_mask & lateral_steer_mask
+        mask = acc_mask & steer_line_mask & lateral_steer_mask
 
         return torch.from_numpy(mask).unsqueeze(0)
 
