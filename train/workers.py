@@ -204,7 +204,7 @@ class EnvWorker(mp.Process):
                                 new_env_state = self.env_post_processer.assemble_surr_vec_obs(obs)
                                 new_vec_state = self.env_post_processer.assemble_ego_vec_obs(obs)
                                 new_available_actions = self.env_post_processer.get_available_actions(obs)  # TODO: available actions
-                            reward, reward_dict = self.env_post_processer.assemble_reward(obs, info)
+                            reward, reward_dict = self.env_post_processer.assemble_reward(obs, info, balance)
                             base_reward = reward_dict['base_reward']
                             collide_reward = reward_dict['collide_reward']
                             rule_reward = reward_dict['rule_reward']

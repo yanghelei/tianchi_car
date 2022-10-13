@@ -65,7 +65,7 @@ def run(worker_index):
             model = PPOPolicy(2)
         else:
             model = CategoricalPPOPolicy(action_num)
-        env_post_processer = EnvPostProcsser(stage=0)
+        env_post_processer = EnvPostProcsser(stage=0, actions_map=actions_map)
         if args.load_model:
             if args.best:
                 ckpt = torch.load(model_dir+f'/best_checkpoint.pth', 'cpu')
@@ -78,9 +78,9 @@ def run(worker_index):
             model_state_dict = ckpt['model_state_dict']
             model.load_state_dict(model_state_dict)
             logger.info(f'model_{start_episode} has been successfully loaded')
-        vec_state, env_state = env_post_processer.reset(obs)
+        vec_state, env_state, available_actions = env_post_processer.reset(obs)
         while True:
-            action, _, _, _ = model.select_action(env_state, vec_state, True)
+            action, _, _, _ = model.select_action(env_state, vec_state, True, available_actions)
             env_action = action_transform(action, PolicyParam.gaussian)
             for _ in range(action_repeat):
                 obs, _, done, info = env.step(env_action)
@@ -101,6 +101,7 @@ def run(worker_index):
                     logger.info(f'{worker_index}, reach_goal_rate:{reach_goal}/{episode}')
             env_state = env_post_processer.assemble_surr_vec_obs(obs)
             vec_state = env_post_processer.assemble_ego_vec_obs(obs)
+            available_actions = env_post_processer.get_available_actions(obs)  # TODO: available actions
     except Exception as e:
         logger.info(f"{worker_index}, error: {str(e)}")
 
