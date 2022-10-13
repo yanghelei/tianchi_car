@@ -153,10 +153,10 @@ class MulProPPO:
 
         return loss_value
 
-    def cal_pi_loss(self, oldlogproba, env_state, actions, advantages):
+    def cal_pi_loss(self, oldlogproba, env_state, actions, advantages, available_actions=None):
 
         minibatch_newlogproba, minibatch_entropy = self.model.eval(
-            env_state, actions
+            env_state, actions, available_actions
         )                
         loss_entropy = -minibatch_entropy # this is -entropy
         assert oldlogproba.shape == minibatch_newlogproba.shape
@@ -180,6 +180,7 @@ class MulProPPO:
         sur_obs = torch.from_numpy(np.array(batch.sur_obs))
         vec_obs = torch.from_numpy(np.array(batch.vec_obs))
         oldlogproba = torch.from_numpy(np.array(batch.logproba))
+        available_actions = torch.from_numpy(np.array(batch.available_actions))
 
         returns = torch.Tensor(batch_size)
         deltas = torch.Tensor(batch_size)
@@ -211,6 +212,7 @@ class MulProPPO:
         oldlogproba = oldlogproba.to(self.params.device)
         advantages = advantages.to(self.params.device)
         returns = returns.to(self.params.device)
+        available_actions = available_actions.to(self.params.device)
         
         for i_epoch in range(self.params.num_epoch):
             rand = np.random.permutation(batch_size)
@@ -227,6 +229,7 @@ class MulProPPO:
                 minibatch_oldlogproba = oldlogproba[minibatch_ind]
                 minibatch_gussain_actions = gaussian_actions[minibatch_ind]
                 minibatch_advantages = advantages[minibatch_ind]
+                minibatch_available_actions = available_actions[minibatch_ind]
                 # apply the advantage norm in the minibatch not the full_batch
                 if self.params.use_advantage_norm:
                     minibatch_advantages = (minibatch_advantages - minibatch_advantages.mean()) \
@@ -238,13 +241,15 @@ class MulProPPO:
                                                             minibatch_oldlogproba, 
                                                             minibatch_env_state, 
                                                             minibatch_gussain_actions, 
-                                                            minibatch_advantages)
+                                                            minibatch_advantages,
+                                                            minibatch_available_actions)
                 else:
                     loss_surr, loss_entropy, approx_kl = self.cal_pi_loss(
                                                             minibatch_oldlogproba, 
                                                             minibatch_env_state, 
                                                             minibatch_actions, 
-                                                            minibatch_advantages)
+                                                            minibatch_advantages,
+                                                            available_actions)
 
                 loss_value = self.cal_value_loss(minibatch_env_state, 
                                                  minibatch_values, 
