@@ -62,10 +62,13 @@ class MulProPPO:
         if self.params.use_value_norm:
             self.value_norm = Normalization(1, device = self.params.device)
         if args.load:
-            if self.start_episode == 0:
-                self.load_checkpoint()
+            if args.best:
+                self.load_checkpoint(self.params.model_path+f'/best_checkpoint.pth')
             else:
-                self.load_checkpoint(self.params.model_path+f'/checkpoint_{args.start_episode}.pth')
+                if self.start_episode == 0:
+                    self.load_checkpoint()
+                else:
+                    self.load_checkpoint(self.params.model_path+f'/checkpoint_{args.start_episode}.pth')
         self.num_episode = self.start_episode + self.params.num_episode
         if not self.load:
             self.warmup_episode = self.start_episode
@@ -249,7 +252,7 @@ class MulProPPO:
                                                             minibatch_env_state, 
                                                             minibatch_actions, 
                                                             minibatch_advantages,
-                                                            available_actions)
+                                                            minibatch_available_actions)
 
                 loss_value = self.cal_value_loss(minibatch_env_state, 
                                                  minibatch_values, 
@@ -439,6 +442,9 @@ class MulProPPO:
                     self.best_reach_rate = reach_goal_rate
                     path = remote_path + "/best_checkpoint.pth"
                     self.save_checkpoint(path, i_episode, self.best_reach_rate)
+                if i_episode > (self.warmup_episode):
+                    save_path = remote_path + f"/checkpoint_{i_episode}.pth"
+                    self.save_checkpoint(save_path, i_episode, self.best_reach_rate)
                 self.logger.info(
                 "--------------------" + 'Eval ' + str(i_episode) + "---------------------"
                                 )
@@ -467,10 +473,11 @@ class MulProPPO:
                 self.writer.show('pi_loss')
                 self.writer.show('entropy_loss')
                 self.writer.show('mean_step')
+                
 
-            if i_episode % self.params.save_num_episode == 0 and i_episode > (self.warmup_episode) or i_episode == (self.num_episode-1):
-                save_path = remote_path + f"/checkpoint_{i_episode}.pth"
-                self.save_checkpoint(save_path, i_episode, self.best_reach_rate)
+            # if i_episode % self.params.save_num_episode == 0 and i_episode > (self.warmup_episode) or i_episode == (self.num_episode-1):
+            #     save_path = remote_path + f"/checkpoint_{i_episode}.pth"
+            #     self.save_checkpoint(save_path, i_episode, self.best_reach_rate)
 
         self.sampler.close()
 
@@ -483,6 +490,7 @@ if __name__ == "__main__":
     parser.add_argument('--stage', type=int, default=1)
     parser.add_argument('--batch_size', type=int, default=5120)
     parser.add_argument('--minibatch_size', type=int, default=512)
+    parser.add_argument('--best', default=False, action='store_true')
     args = parser.parse_args()
     remote_path = CommonConfig.remote_path
     os.makedirs(remote_path, exist_ok=True)

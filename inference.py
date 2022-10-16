@@ -69,6 +69,7 @@ def run(worker_index):
         if args.load_model:
             if args.best:
                 ckpt = torch.load(model_dir+f'/best_checkpoint.pth', 'cpu')
+                start_episode = ckpt['episode']
             else:
                 start_episode = args.start_episode
                 if args.start_episode == 0:
