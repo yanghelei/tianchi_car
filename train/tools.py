@@ -180,9 +180,9 @@ class EnvPostProcsser:
         self.prev_distance = distance_with_target
         step_reward = -0.1
 
-        # if info["collided"]:
-        #     end_reward = -200
-        if info["reached_stoparea"]:
+        if info["collided"]:
+            end_reward = -200
+        elif info["reached_stoparea"]:
             end_reward = 200
         elif info["timeout"]:
             end_reward = -200
