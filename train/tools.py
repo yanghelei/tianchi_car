@@ -305,7 +305,6 @@ class EnvPostProcsser:
         info = dict(base_reward=base_reward, collide_reward=collide_reward, rule_reward=rule_reward)
 
         return total_reward, info
-<<<<<<< HEAD
     
     def pid_control(self):
         
@@ -317,8 +316,6 @@ class EnvPostProcsser:
         steer = min(steer, np.pi/360)
         steer = max(steer, -np.pi/360)
         return steer
-=======
->>>>>>> 621736ff326402722e9d9f40063746278b75823c
 
     def get_available_actions(self, observation):
 
@@ -423,6 +420,8 @@ class EnvPostProcsser:
             for lane_info in observation["map"].lanes:
                 lane_list.append(lane_info.lane_id)
             current_lane_index = lane_list.index(observation["map"].lane_id)
+            current_offset = observation["map"].lane_offset
+
         else:
             logger.info('map in obs is None!')
             current_lane_index = -1
@@ -431,8 +430,11 @@ class EnvPostProcsser:
             return False
         else:
             # 判断当前车辆的航向角是否与车道线夹角大于阈值
-            if abs(abs(observation['player']['status'][2]) - np.pi) < np.pi / 72:
-                # 根据角度无需调整，无视前方车辆离得多近
+            if abs(abs(observation['player']['status'][2]) - np.pi) < np.pi / 720:
+                return False
+            if abs(abs(observation['player']['status'][2]) - np.pi) > np.pi / 18:
+                return False
+            if current_offset > 0.5:
                 return False
 
             # 处理当前车辆与npc之间的关系

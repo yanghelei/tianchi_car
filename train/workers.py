@@ -100,8 +100,8 @@ class EnvWorker(mp.Process):
         #dicretise action space
         forces = np.linspace(-0.7, 0.7, num=11, endpoint=True)
         thetas = np.linspace(-0.13, 0.13, num=11, endpoint=True) # 7度
-        thetas[4] /= 2
-        thetas[6] /= 2
+        # thetas[4] /= 2
+        # thetas[6] /= 2
         actions = [[force, theta] for force in forces for theta in thetas]
         actions_map = {i:actions[i] for i in range(action_num)}
         return actions_map 

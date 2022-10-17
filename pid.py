@@ -68,8 +68,8 @@ class PIDController(object):
 
         self.sum_e = 0 
 
-        for indx in range(len(self.error_list)):
-            self.error_list[indx] = 0
+        for indx in range(self.error_list.maxlen):
+            self.error_list.append(0)
             
         self.step = 0 
 
@@ -93,8 +93,8 @@ class PIDController(object):
         self.last_control = 0 
         self.theta = -np.pi
         self.sum_e = 0 
-        for indx in range(len(self.error_list)):
-            self.error_list[indx] = 0
+        for indx in range(self.error_list.maxlen):
+            self.error_list.append(0)
 
 
         

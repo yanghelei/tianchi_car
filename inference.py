@@ -16,6 +16,8 @@ import torch
 from train.config import CommonConfig, PolicyParam
 import re
 import os 
+from train.config import PIDConfig
+
 logger = Logger.get_logger(__name__)
 torch.set_num_threads(1)
 model_dir = CommonConfig.remote_path
@@ -65,7 +67,7 @@ def run(worker_index):
             model = PPOPolicy(2)
         else:
             model = CategoricalPPOPolicy(action_num)
-        env_post_processer = EnvPostProcsser(stage=0, actions_map=actions_map)
+        env_post_processer = EnvPostProcsser(stage=0, actions_map=actions_map, pid_params=PIDConfig)
         if args.load_model:
             if args.best:
                 ckpt = torch.load(model_dir+f'/best_checkpoint.pth', 'cpu')
@@ -81,8 +83,17 @@ def run(worker_index):
             logger.info(f'model_{start_episode} has been successfully loaded')
         vec_state, env_state, available_actions = env_post_processer.reset(obs)
         while True:
+            pid_flag = env_post_processer.judge_for_adjust_steer(obs)
+            
             action, _, _, _ = model.select_action(env_state, vec_state, True, available_actions)
             env_action = action_transform(action, PolicyParam.gaussian)
+            if not pid_flag:
+                env_action = env_action
+                env_post_processer.pid_controller.turn_off()
+            else:
+                env_post_processer.pid_controller.turn_on()
+                steer = env_post_processer.pid_control()
+                env_action[0] = steer
             for _ in range(action_repeat):
                 obs, _, done, info = env.step(env_action)
                 if done:
