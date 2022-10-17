@@ -96,6 +96,7 @@ class PIDController(object):
             error = -offset
         elif pos_y > ((3.75 / 2)+1):
             error = offset
+        else: error = -offset
 
         self.error_list.append(error)
 

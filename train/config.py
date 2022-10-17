@@ -129,4 +129,4 @@ class PIDConfig:
 
     kp = 0.001
     ki = 0
-    kd = 0.01
+    kd = 0.01*3
