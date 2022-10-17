@@ -313,8 +313,11 @@ class EnvPostProcsser:
         # else:
         #     steer = self.pid_controller.incre_pid_calculate()
         steer = self.pid_controller.absolute_pid_calculate()
+        # steer = self.pid_controller.incre_pid_calculate()
         steer = min(steer, np.pi/360)
         steer = max(steer, -np.pi/360)
+        logger.info(f'steer: {steer}')
+
         return steer
 
     def get_available_actions(self, observation):
@@ -430,8 +433,8 @@ class EnvPostProcsser:
             return False
         else:
             # 判断当前车辆的航向角是否与车道线夹角大于阈值
-            if abs(abs(observation['player']['status'][2]) - np.pi) < np.pi / 720:
-                return False
+            # if abs(abs(observation['player']['status'][2]) - np.pi) < np.pi / 720:
+            #     return False
             if abs(abs(observation['player']['status'][2]) - np.pi) > np.pi / 36:
                 return False
             if current_offset > 0.5:
@@ -466,7 +469,7 @@ class EnvPostProcsser:
                 if abs(npc_x - curr_xy[0]) < min_distance_from_forward:
                     min_distance_from_forward = abs(npc_x - curr_xy[0])
 
-            if min_distance_from_forward <= 15:
+            if min_distance_from_forward <= 20:
                 # 紧急情况，不需要调整，依靠学习策略
                 return False
             return True

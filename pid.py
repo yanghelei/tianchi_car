@@ -40,7 +40,7 @@ class PIDController(object):
 
         self.curr_control = self.last_control + control_delta
 
-        u = self.curr_control*0.9 + self.last_control
+        u = self.curr_control*0.95 + self.last_control*0.05
 
         self.last_control = u 
 

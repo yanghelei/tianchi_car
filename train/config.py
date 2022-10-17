@@ -127,6 +127,6 @@ class CommonConfig:
 
 class PIDConfig:
 
-    kp = 4
-    ki = 0.05
-    kd = 0.2
+    kp = 0.001
+    ki = 0
+    kd = 0.001
