@@ -152,7 +152,7 @@ class EnvPostProcsser:
         self.pre_vec_obs = vec_obs
 
         if self.pid_controller is not None:
-            self.pid_controller.update(curr_yaw)
+            self.pid_controller.update(curr_yaw, current_offset, curr_xy[1])
 
         return vec_obs
 
@@ -308,11 +308,11 @@ class EnvPostProcsser:
     
     def pid_control(self):
         
-        if self.pid_controller.step == 0 : 
-            steer = self.pid_controller.absolute_pid_calculate()
-        else:
-            steer = self.pid_controller.incre_pid_calculate()
-
+        # if self.pid_controller.step == 0 : 
+        #     steer = self.pid_controller.absolute_pid_calculate()
+        # else:
+        #     steer = self.pid_controller.incre_pid_calculate()
+        steer = self.pid_controller.absolute_pid_calculate()
         steer = min(steer, np.pi/360)
         steer = max(steer, -np.pi/360)
         return steer
@@ -432,7 +432,7 @@ class EnvPostProcsser:
             # 判断当前车辆的航向角是否与车道线夹角大于阈值
             if abs(abs(observation['player']['status'][2]) - np.pi) < np.pi / 720:
                 return False
-            if abs(abs(observation['player']['status'][2]) - np.pi) > np.pi / 18:
+            if abs(abs(observation['player']['status'][2]) - np.pi) > np.pi / 36:
                 return False
             if current_offset > 0.5:
                 return False

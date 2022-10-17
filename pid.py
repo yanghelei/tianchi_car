@@ -20,6 +20,8 @@ class PIDController(object):
 
         self.pid_mode = False # 是否开启PID模式
 
+        self.line_width = 3.75
+
     def incre_pid_calculate(self):
 
         '''
@@ -52,7 +54,7 @@ class PIDController(object):
         er1 = self.error_list[-1]
         er2 = self.error_list[-2]
         u = self._kp * er1 + self._kd * (er1 - er2) + self._ki * self.sum_e
-
+        u = 0.95*u + self.last_control*0.05
         self.last_control = u
 
         return u
@@ -68,24 +70,39 @@ class PIDController(object):
 
         self.sum_e = 0 
 
-        for indx in range(self.error_list.maxlen):
-            self.error_list.append(0)
+        # for indx in range(self.error_list.maxlen):
+        #     self.error_list.append(0)
             
         self.step = 0 
 
-    def update(self, theta):
+    # def update(self, theta):
+
+    #     self.theta = theta
+    #     if theta > 0:
+    #         error = np.pi - theta 
+    #     elif theta < 0 :
+    #         error = -np.pi - theta
+    #     else:
+    #         error = 0 
+
+    #     if self.pid_mode:
+    #         self.error_list.append(error)
+    #         self.sum_e += error
+    #         self.step += 1
+    def update(self, theta, offset, pos_y):
 
         self.theta = theta
-        if theta > 0:
-            error = np.pi - theta 
-        elif theta < 0 :
-            error = -np.pi - theta
-        else:
-            error = 0 
+        if 1 < pos_y <  ((3.75 / 2) + 1):
+            error = -offset
+        elif pos_y > ((3.75 / 2)+1):
+            error = offset
+
+        self.error_list.append(error)
 
         if self.pid_mode:
-            self.error_list.append(error)
+
             self.sum_e += error
+
             self.step += 1
 
     def initial(self):
@@ -93,7 +110,7 @@ class PIDController(object):
         self.last_control = 0 
         self.theta = -np.pi
         self.sum_e = 0 
-        for indx in range(self.error_list.maxlen):
+        for _ in range(self.error_list.maxlen):
             self.error_list.append(0)
 
 
