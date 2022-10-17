@@ -316,7 +316,7 @@ class EnvPostProcsser:
         # steer = self.pid_controller.incre_pid_calculate()
         steer = min(steer, np.pi/360)
         steer = max(steer, -np.pi/360)
-        logger.info(f'steer: {steer}')
+        # logger.info(f'steer: {steer}')
 
         return steer
 
@@ -437,7 +437,7 @@ class EnvPostProcsser:
             #     return False
             if abs(abs(observation['player']['status'][2]) - np.pi) > np.pi / 36:
                 return False
-            if current_offset > 0.5:
+            if current_offset > 0.6:
                 return False
 
             # 处理当前车辆与npc之间的关系
