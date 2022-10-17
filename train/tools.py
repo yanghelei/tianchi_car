@@ -14,6 +14,7 @@ from train.config import PolicyParam
 import numpy as np 
 from geek.env.logger import Logger
 from utils.geometry import get_polygon
+from pid import PIDController
 
 logger = Logger.get_logger(__name__)
 STD = 2 ** 0.5
@@ -28,7 +29,7 @@ def file_name(file_dir, file_type):
     return L
 
 class EnvPostProcsser:
-    def __init__(self, stage, actions_map) -> None:
+    def __init__(self, stage, actions_map, pid_params=None) -> None:
         self.args = PolicyParam
 
         self.actions_map = actions_map
@@ -56,6 +57,10 @@ class EnvPostProcsser:
             self.surr_vec_deque.append(numpy.zeros((1, self.surr_number * self.surr_vec_length)))
             self.vec_deque.append(numpy.zeros(self.vec_length))
         # self.tianchi_cnn = TianchiCNN()  # not used
+        if pid_params is not None :
+            self.pid_controller = PIDController(pid_params)
+        else: 
+            self.pid_controller = None
 
     def process_surr_vec_obs(self, observation) -> np.array :
 
@@ -145,6 +150,10 @@ class EnvPostProcsser:
             ]
         )
         self.pre_vec_obs = vec_obs
+
+        if self.pid_controller is not None:
+            self.pid_controller.update(curr_yaw)
+
         return vec_obs
 
     def assemble_ego_vec_obs(self, obs) -> torch.tensor:
@@ -297,6 +306,17 @@ class EnvPostProcsser:
 
         return total_reward, info
     
+    def pid_control(self):
+        
+        if self.pid_controller.step == 0 : 
+            steer = self.pid_controller.absolute_pid_calculate()
+        else:
+            steer = self.pid_controller.incre_pid_calculate()
+
+        steer = min(steer, np.pi/360)
+        steer = max(steer, -np.pi/360)
+        return steer
+
     def get_available_actions(self, observation):
         
         actions = np.array(list(self.actions_map.values()))
@@ -380,4 +400,6 @@ class EnvPostProcsser:
         ego_vec_state = torch.from_numpy(numpy.array(list(self.vec_deque))).unsqueeze(0) # [1,5,8]
         sur_vec_state = torch.from_numpy(numpy.array(list(self.surr_vec_deque))).unsqueeze(0) # [1,5,8]
         available_actions = self.get_available_actions(initial_obs)
+        if self.pid_controller is not None:
+            self.pid_controller.initial()
         return ego_vec_state, sur_vec_state, available_actions

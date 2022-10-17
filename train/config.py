@@ -16,7 +16,7 @@ import numpy as np
 class PolicyParam():
     seed: int = 1234
 
-    debug = False
+    debug = True
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
     gaussian = False # 动作是否连续
     action_repeat: int = 1 
@@ -124,3 +124,9 @@ class CommonConfig:
         remote_path = str(Path(os.path.dirname(__file__)).resolve().parent.parent / 'myspace' / 'ryd'/ 'categorical_ppo') # train保存位置 inference加载位置
     env_action_space = Box(low=np.array([-0.13, -0.7]), high=np.array([0.13, 0.7]), dtype=np.float32)
     action_num = 121
+
+class PIDConfig:
+
+    kp = 4
+    ki = 0.05
+    kd = 0.2
