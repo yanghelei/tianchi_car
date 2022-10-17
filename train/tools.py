@@ -11,7 +11,7 @@ import traceback
 import numpy
 import torch
 from train.config import PolicyParam
-import numpy as np 
+import numpy as np
 from geek.env.logger import Logger
 from utils.geometry import get_polygon
 
@@ -50,20 +50,20 @@ class EnvPostProcsser:
         # running mean std 
         self.surr_vec_deque = collections.deque(maxlen=self.history_length)
         self.vec_deque = collections.deque(maxlen=self.history_length)
-        self.stage = stage 
+        self.stage = stage
         for i in range(self.history_length):
             # self.surr_img_deque.append(numpy.zeros((self.img_width, self.img_length, 3)))
             self.surr_vec_deque.append(numpy.zeros((1, self.surr_number * self.surr_vec_length)))
             self.vec_deque.append(numpy.zeros(self.vec_length))
         # self.tianchi_cnn = TianchiCNN()  # not used
 
-    def process_surr_vec_obs(self, observation) -> np.array :
+    def process_surr_vec_obs(self, observation) -> np.array:
 
         curr_xy = (observation["player"]["status"][0],  # 车辆后轴中心位置 x
                    observation["player"]["status"][1])  # 车辆后轴中心位置 y 
 
         npc_info_dict = {}
-        
+
         for npc_info in observation["npcs"]:
             if int(npc_info[0]) == 0:
                 continue
@@ -71,18 +71,18 @@ class EnvPostProcsser:
             npc_info_dict[
                 numpy.sqrt((npc_info[2] - curr_xy[0]) ** 2 + (npc_info[3] - curr_xy[1]) ** 2)
             ] = [
-                npc_info[2] - curr_xy[0], # dx
-                npc_info[3] - curr_xy[1], # dy
-                npc_info[4], # 障碍物朝向
-                numpy.sqrt(npc_info[5] ** 2 + npc_info[6] ** 2), # 障碍物速度大小（标量）
-                numpy.sqrt(npc_info[7] ** 2 + npc_info[8] ** 2), # 障碍物加速度大小（标量）
-                npc_info[9], # 障碍物宽度
-                npc_info[10], # 障碍物长度
+                npc_info[2] - curr_xy[0],  # dx
+                npc_info[3] - curr_xy[1],  # dy
+                npc_info[4],  # 障碍物朝向
+                numpy.sqrt(npc_info[5] ** 2 + npc_info[6] ** 2),  # 障碍物速度大小（标量）
+                numpy.sqrt(npc_info[7] ** 2 + npc_info[8] ** 2),  # 障碍物加速度大小（标量）
+                npc_info[9],  # 障碍物宽度
+                npc_info[10],  # 障碍物长度
             ]
-         # 按距离由近至远排序
+        # 按距离由近至远排序
         sorted_npc_info_dict = dict(sorted(npc_info_dict.items(), key=lambda x: x[0]))
         surr_obs_list = list(sorted_npc_info_dict.values())
-         # 若数量不足surr_number则补齐
+        # 若数量不足surr_number则补齐
         for _ in range(self.surr_number - len(surr_obs_list)):
             surr_obs_list.append(list(numpy.zeros(self.surr_vec_length)))
         # 截断 
@@ -91,7 +91,7 @@ class EnvPostProcsser:
         return curr_surr_obs
 
     def assemble_surr_vec_obs(self, obs) -> torch.tensor:
-        
+
         obs = deepcopy(obs)
         curr_surr_obs = self.process_surr_vec_obs(obs)
         # 加入到末尾帧
@@ -102,20 +102,20 @@ class EnvPostProcsser:
 
     def process_ego_vec_obs(self, observation) -> np.array:
         target_xy = (
-            (observation["player"]["target"][0] + observation["player"]["target"][4]) / 2, # 目标区域中心位置x
-            (observation["player"]["target"][1] + observation["player"]["target"][5]) / 2, # 目标区域中心位置y
+            (observation["player"]["target"][0] + observation["player"]["target"][4]) / 2,  # 目标区域中心位置x
+            (observation["player"]["target"][1] + observation["player"]["target"][5]) / 2,  # 目标区域中心位置y
         )
-        curr_xy = (observation["player"]["status"][0], observation["player"]["status"][1]) # 当前车辆位置
-        delta_xy = (target_xy[0] - curr_xy[0], target_xy[1] - curr_xy[1]) # 目标区域与当前位置的绝对偏差
-        curr_yaw = observation["player"]["status"][2] # 当前朝向
-        curr_velocity = observation["player"]["status"][3] # 当前车辆后轴中心纵向速度
-        curr_velocity_prime = observation["player"]["status"][4] # 当前车辆后轴中心纵向加速度
-        curr_lateral_acc = observation["player"]["status"][5] # 当前车辆横向加速度
-        curr_wheel_angle = observation["player"]["status"][6] # 当前车辆前轮转角
-        prev_steer = observation["player"]["status"][7] # 上一个前轮转角命令
-        prev_acc = observation["player"]["status"][8] # 上一个加速度命令
+        curr_xy = (observation["player"]["status"][0], observation["player"]["status"][1])  # 当前车辆位置
+        delta_xy = (target_xy[0] - curr_xy[0], target_xy[1] - curr_xy[1])  # 目标区域与当前位置的绝对偏差
+        curr_yaw = observation["player"]["status"][2]  # 当前朝向
+        curr_velocity = observation["player"]["status"][3]  # 当前车辆后轴中心纵向速度
+        curr_velocity_prime = observation["player"]["status"][4]  # 当前车辆后轴中心纵向加速度
+        curr_lateral_acc = observation["player"]["status"][5]  # 当前车辆横向加速度
+        curr_wheel_angle = observation["player"]["status"][6]  # 当前车辆前轮转角
+        prev_steer = observation["player"]["status"][7]  # 上一个前轮转角命令
+        prev_acc = observation["player"]["status"][8]  # 上一个加速度命令
         lane_list = []
-                    
+
         if observation['map'] is not None:
             for lane_info in observation["map"].lanes:
                 lane_list.append(lane_info.lane_id)
@@ -155,7 +155,7 @@ class EnvPostProcsser:
         self.vec_deque.append(vec_obs)
         mlp_obs = numpy.array(list(self.vec_deque))
         ego_state = torch.Tensor(mlp_obs).float().unsqueeze(0)
-        
+
         return ego_state
 
     def assemble_reward(self, observation: Dict, info: Dict, balance=None) -> float:
@@ -175,7 +175,7 @@ class EnvPostProcsser:
 
         if self.prev_distance is None:
             self.prev_distance = distance_with_target
-        
+
         distance_reward = (self.prev_distance - distance_with_target) * 0.5
         self.prev_distance = distance_with_target
         step_reward = -0.1
@@ -188,7 +188,7 @@ class EnvPostProcsser:
             end_reward = -200
         else:
             end_reward = 0.0
-        
+
         if observation['map'] is not None:
             lane_list = []
             for lane_info in observation["map"].lanes:
@@ -203,42 +203,42 @@ class EnvPostProcsser:
             speed_limit = 27.78
 
         # add penalty when reaching close to other cars (same lane)
-        length = observation["player"]['property'][1] # 车辆长度
-        width = observation["player"]['property'][0] # 车辆宽度
-        npc_info = observation['npcs'] 
-        same_lane_npcs = [] # 同车道 npc
-        neighbor_lane_npcs = [] # 不同车道 npc
+        length = observation["player"]['property'][1]  # 车辆长度
+        width = observation["player"]['property'][0]  # 车辆宽度
+        npc_info = observation['npcs']
+        same_lane_npcs = []  # 同车道 npc
+        neighbor_lane_npcs = []  # 不同车道 npc
         for npc in npc_info:
             if npc[0] == 0:
                 break
             dy = npc[3] - observation["player"]['status'][1]
             dx = npc[2] - observation["player"]['status'][0]
-            if np.abs(dy) < (width + npc[-2])/2:
+            if np.abs(dy) < (width + npc[-2]) / 2:
                 same_lane_npcs.append(npc)
-            if np.abs(dx) < (length + npc[-1])/2: # (车长 + npc车长)/2
+            if np.abs(dx) < (length + npc[-1]) / 2:  # (车长 + npc车长)/2
                 neighbor_lane_npcs.append(npc)
 
         collide_reward_1 = 0
         for npc in same_lane_npcs:
-            safe_distance = (npc[-1] + length)/2 + length
+            safe_distance = (npc[-1] + length) / 2 + length
             dx = npc[2] - observation["player"]['status'][0]
             if dx < 0:
                 if np.abs(dx) < safe_distance:
-                    penalty = -0.1-(safe_distance - np.abs(dx))*0.1
+                    penalty = -0.1 - (safe_distance - np.abs(dx)) * 0.1
                     collide_reward_1 = min(collide_reward_1, penalty)
-        
+
         # add penalty when reaching close to other cars (different lane)
         collide_reward_2 = 0
         for npc in neighbor_lane_npcs:
-            safe_distance = ((npc[-2]) + width)/2 + 0.5
+            safe_distance = ((npc[-2]) + width) / 2 + 0.5
             dy = npc[3] - observation["player"]['status'][1]
             if np.abs(dy) < safe_distance:
-                penalty = -0.1-(safe_distance - np.abs(dy))*1
+                penalty = -0.1 - (safe_distance - np.abs(dy)) * 1
                 collide_reward_2 = min(collide_reward_2, penalty)
 
         collide_reward = collide_reward_1 + collide_reward_2
         if info['collided']:
-            collide_reward -= 10 
+            collide_reward -= 10
 
         speed = observation["player"]["status"][3]
         acc_y = observation["player"]["status"][5]
@@ -250,7 +250,7 @@ class EnvPostProcsser:
         acc_y_dealta = (acc_y - last_acc_y) / self.args.dt
         acc_x_dealta = (acc_x - last_acc_x) / self.args.dt
 
-        acc_prime_reward = 0 
+        acc_prime_reward = 0
         acc_reward = 0
         speed_reward = 0
         offset_reward = 0
@@ -259,46 +259,46 @@ class EnvPostProcsser:
         if np.abs(acc_y) > 4:
             acc_reward += -1
         elif np.abs(acc_y) > 2:
-            acc_reward += -0.4 - (np.abs(acc_y) - 2)*0.3
+            acc_reward += -0.4 - (np.abs(acc_y) - 2) * 0.3
         if np.abs(acc_y_dealta) > 0.9:
             acc_prime_reward += -1
         elif np.abs(acc_y_dealta) > 0.7:
-            acc_prime_reward += -0.4 - (np.abs(acc_y_dealta) - 0.7)*3
+            acc_prime_reward += -0.4 - (np.abs(acc_y_dealta) - 0.7) * 3
 
         # add penalty when make big jerk (x axis)
         if np.abs(acc_x_dealta) > 0.9:
             acc_prime_reward += -1
         elif np.abs(acc_x_dealta) > 0.7:
-            acc_prime_reward += -0.4 - (np.abs(acc_x_dealta) - 0.7)*3
+            acc_prime_reward += -0.4 - (np.abs(acc_x_dealta) - 0.7) * 3
 
         # add penalty when speed over limit
         if speed > speed_limit:
-            speed_reward += -(speed - speed_limit)*0.1
+            speed_reward += -(speed - speed_limit) * 0.1
 
         # add penalty when offset is too large (lane width 3.75)
         # if current_lane_index == 2:
         if np.abs(current_offset) > 0.5:
-            offset_reward += -(np.abs(current_offset)-0.5)*1
+            offset_reward += -(np.abs(current_offset) - 0.5) * 1
 
         rule_reward = speed_reward + acc_reward + acc_prime_reward + offset_reward
 
         self.last_obs = observation
         base_reward = distance_reward + end_reward + step_reward
         # balance different reward 
-        collide_reward_balance = 0 
+        collide_reward_balance = 0
         rule_reward_balance = 0
         if self.stage == 2:
             rule_reward_balance = 1
         # test 
         if balance is not None:
             rule_reward_balance = balance
-        total_reward = base_reward + collide_reward_balance*collide_reward + rule_reward_balance*rule_reward 
+        total_reward = base_reward + collide_reward_balance * collide_reward + rule_reward_balance * rule_reward
         info = dict(base_reward=base_reward, collide_reward=collide_reward, rule_reward=rule_reward)
 
         return total_reward, info
-    
+
     def get_available_actions(self, observation):
-        
+
         actions = np.array(list(self.actions_map.values()))
 
         curr_xy = (observation["player"]["status"][0], observation["player"]["status"][1])  # 当前车辆位置
@@ -335,14 +335,15 @@ class EnvPostProcsser:
             block_x_range = (min(npc_x), max(npc_x))
             block_y_range = (min(npc_y), max(npc_y))
 
-            if block_x_range[0] < min(car_x) < block_x_range[1] or block_x_range[0] < max(car_x) < block_x_range[1]:  # 如果 car 和 npc 并排前行
+            if block_x_range[0] < min(car_x) < block_x_range[1] or block_x_range[0] < max(car_x) < block_x_range[
+                1]:  # 如果 car 和 npc 并排前行
                 if min(car_y) < block_y_range[0]:  # car 在 npc 的左侧
                     if safe_distance < 0.82 and observation["player"]["status"][2] > 0:  # 小于安全距离并且车头仍朝右
                         steer_masks[1] = False  # 右转屏蔽
                 elif max(car_y) > block_y_range[1]:  # car 在 npc 的右侧
                     if safe_distance < 0.82 and observation["player"]["status"][2] < 0:  # 小于安全距离并且车头仍朝左
                         steer_masks[0] = False  # 左转屏蔽
-        
+
         if min(car_y) < 1:  # 车辆压左线
             steer_line_mask = actions[:, 0] < 0
         elif max(car_y) > 1 + 3.75 * 3:  # 车辆压右线
@@ -377,7 +378,68 @@ class EnvPostProcsser:
         for i in range(self.history_length):
             self.vec_deque.append(ego_vec_state)
             self.surr_vec_deque.append(sur_vec_state)
-        ego_vec_state = torch.from_numpy(numpy.array(list(self.vec_deque))).unsqueeze(0) # [1,5,8]
-        sur_vec_state = torch.from_numpy(numpy.array(list(self.surr_vec_deque))).unsqueeze(0) # [1,5,8]
+        ego_vec_state = torch.from_numpy(numpy.array(list(self.vec_deque))).unsqueeze(0)  # [1,5,8]
+        sur_vec_state = torch.from_numpy(numpy.array(list(self.surr_vec_deque))).unsqueeze(0)  # [1,5,8]
         available_actions = self.get_available_actions(initial_obs)
         return ego_vec_state, sur_vec_state, available_actions
+
+    @staticmethod
+    def judge_for_adjust_steer(observation):
+        """
+        在环境根据observation获得下次执行的动作之前，判断该观测是否满足执行pid调节角度的条件
+        1、当前车道位于第一车道
+        2、当前车辆所在车道其安全距离内无其他车辆
+        3、进入当前车道时，车辆的航向角与道路中心线夹角大于某个阈值
+        满足条件1、2、3切换至pid调节转向角，至车辆航向角稳定至0附近某个很小区间
+        """
+        # 获取当前所在车道
+        if observation['map'] is not None:
+            lane_list = []
+            for lane_info in observation["map"].lanes:
+                lane_list.append(lane_info.lane_id)
+            current_lane_index = lane_list.index(observation["map"].lane_id)
+        else:
+            logger.info('map in obs is None!')
+            current_lane_index = -1
+
+        if current_lane_index != 2:
+            return False
+        else:
+            # 判断当前车辆的航向角是否与车道线夹角大于阈值
+            if abs(abs(observation['player']['status'][2]) - np.pi) < np.pi / 72:
+                # 根据角度无需调整，无视前方车辆离得多近
+                return False
+
+            # 处理当前车辆与npc之间的关系
+            curr_xy = (observation["player"]["status"][0],  # 车辆后轴中心位置 x
+                       observation["player"]["status"][1])  # 车辆后轴中心位置 y
+
+            width = observation["player"]['property'][0]  # 车辆宽度
+            same_lane_npcs = []  # 同车道 npc
+
+            # 获得同车道npc的位置信息
+            for npc_info in observation["npcs"]:
+                if int(npc_info[0]) == 0:
+                    break
+
+                dy = npc_info[3] - observation["player"]['status'][1]
+                if np.abs(dy) < (width + npc_info[-2]) / 2:
+                    same_lane_npcs.append(npc_info)
+
+            min_distance_from_forward = np.inf
+            for npc_info in same_lane_npcs:
+                # 处理同车道npc之间的距离关系
+                npc_x = npc_info[2]
+
+                # 忽略后方车辆
+                if npc_x >= curr_xy[0]:
+                    continue
+
+                # 观测范围内前方车辆的距离
+                if abs(npc_x - curr_xy[0]) < min_distance_from_forward:
+                    min_distance_from_forward = abs(npc_x - curr_xy[0])
+
+            if min_distance_from_forward <= 15:
+                # 紧急情况，不需要调整，依靠学习策略
+                return False
+            return True
