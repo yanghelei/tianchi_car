@@ -82,8 +82,10 @@ def run(worker_index):
             model.load_state_dict(model_state_dict)
             logger.info(f'model_{start_episode} has been successfully loaded')
         vec_state, env_state, available_actions = env_post_processer.reset(obs)
+        acc_flag =False
         while True:
             pid_flag = env_post_processer.judge_for_adjust_steer(obs)
+            acc_flag = env_post_processer.judge_for_adjust_acc(obs, acc_flag)
             
             action, _, _, _ = model.select_action(env_state, vec_state, True, available_actions)
             env_action = action_transform(action, PolicyParam.gaussian)
@@ -94,6 +96,8 @@ def run(worker_index):
                 env_post_processer.pid_controller.turn_on()
                 steer = env_post_processer.pid_control()
                 env_action[0] = steer
+            if acc_flag:
+                env_action[1] = -5
             for _ in range(action_repeat):
                 obs, _, done, info = env.step(env_action)
                 if done:

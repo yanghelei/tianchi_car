@@ -473,3 +473,97 @@ class EnvPostProcsser:
                 # 紧急情况，不需要调整，依靠学习策略
                 return False
             return True
+
+    @staticmethod
+    def judge_for_adjust_acc(observation, last_step_flag):
+        """
+        在环境根据observation获得下次执行的动作之前，判断该观测是否满足执行急刹的条件
+        1、车道前方的车辆在危险距离内
+        2、车未做出任何的转向动作
+
+        满足条件1、2: 采取急刹动作，直到和前方的车在安全距离外
+        """
+        dangerous_time = 1
+        safe_time = 3
+
+        # 处理当前车辆与npc之间的关系
+        curr_xy = (observation["player"]["status"][0],  # 车辆后轴中心位置 x
+                    observation["player"]["status"][1])  # 车辆后轴中心位置 y
+
+        curr_yaw = observation['player']['status'][2] # 车辆朝向角
+
+        if curr_yaw > 0:
+            curr_yaw = np.pi - curr_yaw 
+        elif curr_yaw < 0 :
+            curr_yaw = -np.pi - curr_yaw
+
+        curr_speed = observation["player"]["status"][3] # 车辆速度
+
+        width = observation["player"]['property'][0]  # 车辆宽度
+        same_lane_npcs = []  # 同车道 npc
+
+        # 获得同车道npc的位置信息
+        for npc_info in observation["npcs"]:
+            if int(npc_info[0]) == 0:
+                break
+
+            dy = npc_info[3] - observation["player"]['status'][1]
+            dx = npc_info[2] - observation['player']['status'][0]
+            #  同车道且在前方的车辆
+            if np.abs(dy) < (width + npc_info[-2]) / 2 and dx < 0:
+                same_lane_npcs.append(npc_info)
+
+        min_time_from_forward = np.inf
+        min_time_from_forward_2 = np.inf
+        if len(same_lane_npcs) == 0:
+            return False
+        elif np.abs(curr_yaw) > np.pi/36:
+            return False
+        else:
+            car_polygon = get_polygon(
+                center=curr_xy,
+                length=observation["player"]['property'][1],  # 车辆长度
+                width=observation["player"]['property'][0],  # 车辆宽度
+                theta=observation["player"]["status"][2]  # 车辆朝向角
+            )
+            car_x, car_y = car_polygon.exterior.xy
+            for npc_info in same_lane_npcs:
+            # 处理同车道npc之间的距离关系
+                npc_center = (npc_info[2], npc_info[3])
+                npc_width = npc_info[9]
+                npc_length = npc_info[10]
+                npc_theta = npc_info[4]
+                npc_speed = npc_info[5]
+
+                npc_polygon = get_polygon(
+                    center=npc_center,
+                    length=npc_length,
+                    width=npc_width,
+                    theta=npc_theta
+                )
+
+                distance_2 = car_polygon.distance(npc_polygon)
+                # if abs(npc_center[0] - curr_xy[0]) < min_distance_from_forward:
+                distance = max(abs(npc_center[0] - curr_xy[0]) - 4.92, 0)
+
+                d_speed = curr_speed - npc_speed 
+                if d_speed < 0:
+                    continue
+                time_with_collision = distance / (d_speed)
+                if time_with_collision < min_time_from_forward:
+                    min_time_from_forward = time_with_collision
+                time_with_collision_2 = distance_2 / d_speed
+                if time_with_collision_2 < min_time_from_forward_2:
+                    min_time_from_forward_2 = time_with_collision_2
+            if min_time_from_forward_2 <= dangerous_time:
+                logger.info(f'distance2: {distance_2}, distance: {distance}')
+            if min_time_from_forward <= dangerous_time:
+                logger.info(f'distance: {distance} , distance2:{distance_2}')
+                return True
+            elif last_step_flag and min_time_from_forward <= safe_time:
+                return  True
+            else: 
+                return False
+
+
+    
