@@ -29,7 +29,7 @@ def file_name(file_dir, file_type):
     return L
 
 class EnvPostProcsser:
-    def __init__(self, stage, actions_map, pid_params=None) -> None:
+    def __init__(self, stage, actions_map, pid_params=None, pid2_params=None) -> None:
         self.args = PolicyParam
 
         self.actions_map = actions_map
@@ -59,8 +59,10 @@ class EnvPostProcsser:
         # self.tianchi_cnn = TianchiCNN()  # not used
         if pid_params is not None :
             self.pid_controller = PIDController(pid_params)
+            self.pid_controller_2 = PIDController(pid2_params)
         else: 
             self.pid_controller = None
+            self.pid_controller_2 = None
 
     def process_surr_vec_obs(self, observation) -> np.array:
 
@@ -152,7 +154,8 @@ class EnvPostProcsser:
         self.pre_vec_obs = vec_obs
 
         if self.pid_controller is not None:
-            self.pid_controller.update(curr_yaw, current_offset, curr_xy[1])
+            self.pid_controller.update(curr_yaw, current_offset, curr_xy[1], current_lane_index)
+            self.pid_controller_2.update(curr_yaw, current_offset, curr_xy[1], current_lane_index)
 
         return vec_obs
 
@@ -306,16 +309,24 @@ class EnvPostProcsser:
 
         return total_reward, info
     
-    def pid_control(self):
+    def pid_control(self, flag, obs):
         
         # if self.pid_controller.step == 0 : 
         #     steer = self.pid_controller.absolute_pid_calculate()
         # else:
         #     steer = self.pid_controller.incre_pid_calculate()
-        steer = self.pid_controller.absolute_pid_calculate()
-        # steer = self.pid_controller.incre_pid_calculate()
-        steer = min(steer, np.pi/360)
-        steer = max(steer, -np.pi/360)
+        delta_yaw = abs(abs(obs["player"]["status"][2]) - np.pi)
+        if flag == 0:
+            steer = self.pid_controller.absolute_pid_calculate()
+            # steer = self.pid_controller.incre_pid_calculate()
+            steer = min(steer, np.pi/360)
+            steer = max(steer, -np.pi/360)
+            # if np.abs(steer) < 4.5e-5:
+            #     steer = 0
+        elif flag == 1:
+            steer = self.pid_controller_2.absolute_pid_calculate()
+            steer = min(steer, np.pi/60)
+            steer = max(steer, -np.pi/60)
         # logger.info(f'steer: {steer}')
 
         return steer
@@ -373,6 +384,7 @@ class EnvPostProcsser:
             steer_line_mask = actions[:, 0] > 0
         else:
             steer_line_mask = np.ones((len(self.actions_map),), dtype=np.bool_)
+        # steer_line_mask = np.ones((len(self.actions_map),), dtype=np.bool_)
 
         if not steer_masks[0] and steer_masks[1]:  # 左侧有障碍物，车头仍朝左
             lateral_steer_mask = actions[:, 0] < 0
@@ -406,6 +418,7 @@ class EnvPostProcsser:
         available_actions = self.get_available_actions(initial_obs)
         if self.pid_controller is not None:
             self.pid_controller.initial()
+            self.pid_controller_2.initial()
         return ego_vec_state, sur_vec_state, available_actions
 
     @staticmethod
@@ -483,8 +496,8 @@ class EnvPostProcsser:
 
         满足条件1、2: 采取急刹动作，直到和前方的车在安全距离外
         """
-        dangerous_time = 1
-        safe_time = 3
+        dangerous_time = 2
+        safe_time = 4
 
         # 处理当前车辆与npc之间的关系
         curr_xy = (observation["player"]["status"][0],  # 车辆后轴中心位置 x
@@ -502,6 +515,18 @@ class EnvPostProcsser:
         width = observation["player"]['property'][0]  # 车辆宽度
         same_lane_npcs = []  # 同车道 npc
 
+        # 获取当前所在车道
+        if observation['map'] is not None:
+            lane_list = []
+            for lane_info in observation["map"].lanes:
+                lane_list.append(lane_info.lane_id)
+            current_lane_index = lane_list.index(observation["map"].lane_id)
+            current_offset = observation["map"].lane_offset
+
+        else:
+            logger.info('map in obs is None!')
+            current_lane_index = -1
+
         # 获得同车道npc的位置信息
         for npc_info in observation["npcs"]:
             if int(npc_info[0]) == 0:
@@ -514,6 +539,9 @@ class EnvPostProcsser:
                 same_lane_npcs.append(npc_info)
 
         min_time_from_forward = np.inf
+        if current_lane_index == 2:
+            dangerous_time = 1 
+            safe_time = 3
         if len(same_lane_npcs) == 0:
             return False
         elif np.abs(curr_yaw) > np.pi/36:
@@ -538,6 +566,88 @@ class EnvPostProcsser:
             elif last_step_flag and min_time_from_forward <= safe_time:
                 return  True
             else: 
+                return False
+
+    @staticmethod
+    def judge_for_adjust_steer_2(observation, last_step_flag):
+        """
+        在环境根据observation获得下次执行的动作之前，判断该观测是否满足执行pid调节角度的条件
+        1、当前车道位于第一车道
+        2. 当前车做处向左转的动作
+        3、当前车旁边车道有危险车辆
+        满足条件1、2、3切换至pid调节转向角，至车辆航向角稳定至0附近某个很小区间；直到旁边车道没有危险车辆
+        """
+        dannger_distance = 2         
+        safe_distance = 6
+        # 获取当前所在车道
+        if observation['map'] is not None:
+            lane_list = []
+            for lane_info in observation["map"].lanes:
+                lane_list.append(lane_info.lane_id)
+            current_lane_index = lane_list.index(observation["map"].lane_id)
+            current_offset = observation["map"].lane_offset
+
+        else:
+            logger.info('map in obs is None!')
+            current_lane_index = -1
+
+        if current_lane_index != 0:
+            return False
+        else:
+            # 判断当前车辆的航向角是否与车道线夹角大于阈值
+            if abs(abs(observation['player']['status'][2]) - np.pi) < np.pi / 36:
+                return False
+
+            # 处理当前车辆与npc之间的关系
+            curr_xy = (observation["player"]["status"][0],  # 车辆后轴中心位置 x
+                       observation["player"]["status"][1])  # 车辆后轴中心位置 y
+
+            width = observation["player"]['property'][0]  # 车辆宽度
+            length = observation["player"]['property'][1] # 车道长度
+            neighbor_lane_npcs = []  # 相邻车道 npc
+
+            car_polygon = get_polygon(
+                center=curr_xy,
+                length=observation["player"]['property'][1] + 1,  # 车辆长度
+                width=observation["player"]['property'][0] + 1,  # 车辆宽度
+                theta=observation["player"]["status"][2]  # 车辆朝向角
+            )
+            # 获得旁边车道npc的位置信息
+            for npc_info in observation["npcs"]:
+                if int(npc_info[0]) == 0:
+                    break
+            
+                dx = npc_info[2] - observation["player"]['status'][0]
+                dy = npc_info[3] -observation['player']['status'][1]
+                if np.abs(dx) < (length + npc_info[-1]) / 2 and dy < 0:  # (车长 + npc车长)/2
+                    neighbor_lane_npcs.append(npc_info)
+
+            min_distance_from_neighbor = np.inf
+
+            for npc_info in neighbor_lane_npcs:
+                # 处理同车道npc之间的距离关系
+                npc_center = (npc_info[2], npc_info[3])
+                npc_width = npc_info[9]
+                npc_length = npc_info[10]
+                npc_theta = npc_info[4]
+
+                npc_polygon = get_polygon(
+                    center=npc_center,
+                    length=npc_length,
+                    width=npc_width,
+                    theta=npc_theta
+                )
+
+                distance = car_polygon.distance(npc_polygon)
+
+                # 观测范围内旁边车辆的距离
+                if distance < min_distance_from_neighbor:
+                    min_distance_from_neighbor = distance
+
+            if min_distance_from_neighbor < dannger_distance:
+                logger.info(f'distance:{min_distance_from_neighbor}')
+                return True
+            if last_step_flag and abs(abs(observation['player']['status'][2]) - np.pi) < np.pi / 36 and min_distance_from_neighbor > safe_distance:
                 return False
 
 

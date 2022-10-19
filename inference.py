@@ -3,6 +3,7 @@
 # * Unauthorized copying of this file, via any medium is strictly prohibited
 # *****************************************************************************
 
+from math import fabs
 from multiprocessing import Pool
 import gym
 from geek.env.logger import Logger
@@ -13,7 +14,7 @@ from train.workers import EnvWorker
 import numpy as np 
 import argparse 
 import torch
-from train.config import CommonConfig, PolicyParam
+from train.config import CommonConfig, PID2Config, PolicyParam
 import re
 import os 
 from train.config import PIDConfig
@@ -67,7 +68,7 @@ def run(worker_index):
             model = PPOPolicy(2)
         else:
             model = CategoricalPPOPolicy(action_num)
-        env_post_processer = EnvPostProcsser(stage=0, actions_map=actions_map, pid_params=PIDConfig)
+        env_post_processer = EnvPostProcsser(stage=0, actions_map=actions_map, pid_params=PIDConfig, pid2_params=PID2Config)
         if args.load_model:
             if args.best:
                 ckpt = torch.load(model_dir+f'/best_checkpoint.pth', 'cpu')
@@ -83,21 +84,30 @@ def run(worker_index):
             logger.info(f'model_{start_episode} has been successfully loaded')
         vec_state, env_state, available_actions = env_post_processer.reset(obs)
         acc_flag =False
+        pid_flag2 = False
         while True:
             pid_flag = env_post_processer.judge_for_adjust_steer(obs)
             acc_flag = env_post_processer.judge_for_adjust_acc(obs, acc_flag)
-            
+            pid_flag2 = env_post_processer.judge_for_adjust_steer_2(obs, pid_flag2)
             action, _, _, _ = model.select_action(env_state, vec_state, True, available_actions)
             env_action = action_transform(action, PolicyParam.gaussian)
-            if not pid_flag:
+            if pid_flag:
+                env_post_processer.pid_controller.turn_on()
+                env_post_processer.pid_controller_2.turn_off()
+                steer = env_post_processer.pid_control(flag=0, obs=obs)
+                env_action[0] = steer
+                # logger.info(f'worker: {worker_index}, steer: {steer}') 
+            elif pid_flag2:
+                env_post_processer.pid_controller_2.turn_on()
+                env_post_processer.pid_controller.turn_off()
+                steer = env_post_processer.pid_control(flag=1, obs=obs)
+                env_action[0] = steer
+            else:
                 env_action = env_action
                 env_post_processer.pid_controller.turn_off()
-            else:
-                env_post_processer.pid_controller.turn_on()
-                steer = env_post_processer.pid_control()
-                env_action[0] = steer
+                env_post_processer.pid_controller_2.turn_off()
             if acc_flag:
-                env_action[1] = -5
+                env_action[1] = -6
             for _ in range(action_repeat):
                 obs, _, done, info = env.step(env_action)
                 if done:

@@ -89,14 +89,21 @@ class PIDController(object):
     #         self.error_list.append(error)
     #         self.sum_e += error
     #         self.step += 1
-    def update(self, theta, offset, pos_y):
-
+    def update(self, theta, offset, pos_y, line_index = 2):
+        
         self.theta = theta
-        if 1 < pos_y <  ((3.75 / 2) + 1):
-            error = -offset
-        elif pos_y > ((3.75 / 2)+1):
-            error = offset
-        else: error = -offset
+        if line_index == 2:
+            if pos_y <  ((3.75 / 2) + 1):
+                error = -offset
+            else:
+                error = offset
+        elif line_index == 0:
+            if 3.75*2.5+1 < pos_y:
+                error = offset
+            else:
+                error = -offset
+        else:
+            error = 0
 
         self.error_list.append(error)
 
