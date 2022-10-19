@@ -127,12 +127,12 @@ class CommonConfig:
 
 class PIDConfig:
 
-    kp = 0.001
+    kp = 0.0015
     ki = 0
-    kd = 0.01
+    kd = 0.01*5
 
 class PID2Config:
 
     kp = 0.1 
     ki = 0
-    kd = 0.01*3
+    kd = 0.01*5

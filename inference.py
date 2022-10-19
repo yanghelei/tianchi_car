@@ -18,6 +18,7 @@ from train.config import CommonConfig, PID2Config, PolicyParam
 import re
 import os 
 from train.config import PIDConfig
+from utils.util import polynomial_decay
 
 logger = Logger.get_logger(__name__)
 torch.set_num_threads(1)
@@ -94,13 +95,29 @@ def run(worker_index):
             if pid_flag:
                 env_post_processer.pid_controller.turn_on()
                 env_post_processer.pid_controller_2.turn_off()
-                steer = env_post_processer.pid_control(flag=0, obs=obs)
+                steer, info = env_post_processer.pid_control(flag=0, obs=obs)
+                current_step = 1/(np.abs(steer) + 1e-7)
+                current_step = current_step / 1e4
+                if np.abs(steer) < 5.5e-5:
+                    kd = 0
+                    # kp = 0
+                elif np.abs(steer) < 1e-4:
+                    kd  = polynomial_decay(PIDConfig.kd, 0, 5.5*10, 50, current_step)
+                    # kp = polynomial_decay(PIDConfig.kp, 0.001, 5.5*10, 100, current_step)
+                else: 
+                    kd = PIDConfig.kd
+                    # kp = PIDConfig.kp
+                env_post_processer.pid_controller._kd = kd
+                # env_post_processer.pid_controller._kp = kp 
                 env_action[0] = steer
-                # logger.info(f'worker: {worker_index}, steer: {steer}') 
+                kp_out = info['kp_out']
+                kd_out = info['kd_out']
+                big_turn = info['big_turn']
+                # logger.info(f'worker: {worker_index}, steer: {steer}, kp_out: {kp_out}, kd_out: {kd_out}, big_turn: {big_turn}, kd:{env_post_processer.pid_controller._kd}') 
             elif pid_flag2:
                 env_post_processer.pid_controller_2.turn_on()
                 env_post_processer.pid_controller.turn_off()
-                steer = env_post_processer.pid_control(flag=1, obs=obs)
+                steer, info = env_post_processer.pid_control(flag=1, obs=obs)
                 env_action[0] = steer
             else:
                 env_action = env_action

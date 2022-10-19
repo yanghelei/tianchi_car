@@ -53,11 +53,13 @@ class PIDController(object):
         '''
         er1 = self.error_list[-1]
         er2 = self.error_list[-2]
+        kp_out = self._kp * er1
+        kd_out = self._kd * (er1 - er2)
         u = self._kp * er1 + self._kd * (er1 - er2) + self._ki * self.sum_e
         u = 0.95*u + self.last_control*0.05
         self.last_control = u
-
-        return u
+        info = dict(kd_out=kd_out,kp_out=kp_out)
+        return u, info
 
 
     def turn_on(self):

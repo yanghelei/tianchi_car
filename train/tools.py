@@ -316,20 +316,24 @@ class EnvPostProcsser:
         # else:
         #     steer = self.pid_controller.incre_pid_calculate()
         delta_yaw = abs(abs(obs["player"]["status"][2]) - np.pi)
+        acc_y = obs["player"]["status"][5]
+        last_acc_y = self.last_obs["player"]["status"][5]
+        acc_y_dealta = (acc_y - last_acc_y) / self.args.dt
         if flag == 0:
-            steer = self.pid_controller.absolute_pid_calculate()
+            steer, info = self.pid_controller.absolute_pid_calculate()
             # steer = self.pid_controller.incre_pid_calculate()
             steer = min(steer, np.pi/360)
             steer = max(steer, -np.pi/360)
             # if np.abs(steer) < 4.5e-5:
             #     steer = 0
         elif flag == 1:
-            steer = self.pid_controller_2.absolute_pid_calculate()
+            steer, info = self.pid_controller_2.absolute_pid_calculate()
             steer = min(steer, np.pi/60)
             steer = max(steer, -np.pi/60)
         # logger.info(f'steer: {steer}')
-
-        return steer
+        big_turn = acc_y_dealta >= 0.9
+        info['big_turn'] = big_turn
+        return steer, info
 
     def get_available_actions(self, observation):
 
@@ -460,6 +464,8 @@ class EnvPostProcsser:
             width = observation["player"]['property'][0]  # 车辆宽度
             same_lane_npcs = []  # 同车道 npc
 
+            curr_speed = np.abs(observation["player"]["status"][3]) # 车辆速度
+
             # 获得同车道npc的位置信息
             for npc_info in observation["npcs"]:
                 if int(npc_info[0]) == 0:
@@ -468,8 +474,10 @@ class EnvPostProcsser:
                 dy = npc_info[3] - observation["player"]['status'][1]
                 if np.abs(dy) < (width + npc_info[-2]) / 2:
                     same_lane_npcs.append(npc_info)
+                
+            min_distance_from_forward = np.inf 
 
-            min_distance_from_forward = np.inf
+            dangerous_time = 2
             for npc_info in same_lane_npcs:
                 # 处理同车道npc之间的距离关系
                 npc_x = npc_info[2]
@@ -477,12 +485,13 @@ class EnvPostProcsser:
                 # 忽略后方车辆
                 if npc_x >= curr_xy[0]:
                     continue
-
+                npc_speed = np.abs(npc_info[5])
+                
                 # 观测范围内前方车辆的距离
                 if abs(npc_x - curr_xy[0]) < min_distance_from_forward:
                     min_distance_from_forward = abs(npc_x - curr_xy[0])
-
-            if min_distance_from_forward <= 20:
+            
+            if min_distance_from_forward <= 15:
                 # 紧急情况，不需要调整，依靠学习策略
                 return False
             return True
@@ -534,14 +543,15 @@ class EnvPostProcsser:
 
             dy = npc_info[3] - observation["player"]['status'][1]
             dx = npc_info[2] - observation['player']['status'][0]
+
             #  同车道且在前方的车辆
             if np.abs(dy) < (width + npc_info[-2]) / 2 and dx < 0:
                 same_lane_npcs.append(npc_info)
 
         min_time_from_forward = np.inf
         if current_lane_index == 2:
-            dangerous_time = 1 
-            safe_time = 3
+            dangerous_time = 2
+            safe_time = 4
         if len(same_lane_npcs) == 0:
             return False
         elif np.abs(curr_yaw) > np.pi/36:
